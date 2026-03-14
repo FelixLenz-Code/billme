@@ -1175,7 +1175,16 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                           )}
                           <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                <div className={`w-2 h-2 rounded-full ${selectedDocument.status === 'paid' ? 'bg-success' : 'bg-gray-300'}`}></div>
-                               {selectedDocument.status === 'paid' ? 'Bezahlt am 28.10.2023' : 'Noch nicht bezahlt'}
+                               {selectedDocument.status === 'paid'
+                                 ? (() => {
+                                     const lastPayment = (selectedDocument.payments ?? [])
+                                       .slice()
+                                       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
+                                     return lastPayment
+                                       ? `Bezahlt am ${formatDate(lastPayment.date)}`
+                                       : 'Bezahlt';
+                                   })()
+                                 : 'Noch nicht bezahlt'}
                           </div>
                       </div>
 

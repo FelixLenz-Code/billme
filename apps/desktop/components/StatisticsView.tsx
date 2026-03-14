@@ -71,7 +71,7 @@ export const StatisticsView: React.FC = () => {
     const conversionRate = totalCount > 0 ? (paidCount / totalCount) * 100 : 0;
     const avgTicket = paidCount > 0 ? revenue / paidCount : 0;
 
-    return { revenue, outstanding, overdue, conversionRate, avgTicket, totalCount };
+    return { revenue, outstanding, overdue, conversionRate, avgTicket, totalCount, paidCount };
   }, [filteredData]);
 
   const revenueTrend = useMemo(() => {
@@ -263,12 +263,17 @@ export const StatisticsView: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <h3 className="text-3xl font-mono font-bold text-gray-900">{Math.round(kpis.conversionRate)}%</h3>
                     <div className="flex-1 bg-gray-100 h-2 rounded-full overflow-hidden">
-                        <div 
-                            className="bg-black h-full rounded-full transition-all duration-1000" 
+                        <div
+                            className="bg-black h-full rounded-full transition-all duration-1000"
                             style={{ width: `${kpis.conversionRate}%`}}
                         ></div>
                     </div>
                   </div>
+                  {kpis.totalCount > 0 && (
+                    <p className="text-xs text-gray-400 font-medium mt-1.5">
+                      {kpis.paidCount} von {kpis.totalCount} {kpis.totalCount === 1 ? 'Rechnung' : 'Rechnungen'} bezahlt
+                    </p>
+                  )}
               </div>
           </div>
       </div>

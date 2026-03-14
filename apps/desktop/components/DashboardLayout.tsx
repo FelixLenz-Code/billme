@@ -47,6 +47,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(-1);
   const searchContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   const normalizedSearch = normalize(searchTerm);
 
@@ -202,9 +216,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
             {/* Right: Actions */}
             <div className="flex items-center gap-2 w-64 justify-end">
                 <div ref={searchContainerRef} className="relative hidden lg:block">
-                    <div className="flex items-center h-11 px-3 bg-gradient-to-b from-white to-gray-50 border border-gray-200 rounded-2xl shadow-sm transition-all focus-within:shadow-md focus-within:border-gray-300">
-                        <Search size={16} className="text-gray-400 mr-2" />
+                    <div className="flex items-center h-11 px-3 bg-gradient-to-b from-white to-gray-50 border border-gray-200 rounded-2xl shadow-sm transition-all focus-within:shadow-md focus-within:border-gray-300 gap-2">
+                        <Search size={16} className="text-gray-400 shrink-0" />
                         <input
+                            ref={searchInputRef}
                             type="text"
                             value={searchTerm}
                             onFocus={() => setSearchOpen(true)}
@@ -239,8 +254,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
                             }}
                             placeholder="Suchen..."
                             aria-label="Globale Suche"
-                            className="bg-transparent border-none outline-none text-sm font-medium w-44 focus:w-56 transition-all placeholder-gray-400"
+                            className="bg-transparent border-none outline-none text-sm font-medium w-44 focus:w-56 transition-all placeholder-gray-400 flex-1"
                         />
+                        {!searchTerm && (
+                          <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-300 bg-gray-100 border border-gray-200 shrink-0">⌘K</kbd>
+                        )}
                     </div>
 
                     {searchOpen && (

@@ -323,17 +323,38 @@ export const SettingsView: React.FC = () => {
     settings.numbers.customerNumberLength,
   );
 
-  const navItems = [
-    { id: 'company', label: 'Stammdaten', icon: Building2, desc: 'Adresse & Kontakt' },
-    { id: 'catalog', label: 'Kategorien', icon: Tags, desc: 'Produkte & Leistungen' },
-    { id: 'finance', label: 'Finanzen', icon: Landmark, desc: 'Bank & Steuern' },
-    { id: 'numbers', label: 'Nummernkreise', icon: FileDigit, desc: 'Rechnungs-, Angebots- & Kundennr.' },
-    { id: 'email', label: 'E-Mail', icon: Mail, desc: 'SMTP & Resend' },
-    { id: 'dunning', label: 'Mahnwesen', icon: Megaphone, desc: 'Mahnstufen & Gebühren' },
-    { id: 'legal', label: 'Rechtliches', icon: Scale, desc: 'AGB & Steuerregeln' },
-    { id: 'portal', label: 'Portal', icon: Globe, desc: 'Angebotslinks & Sync' },
-    { id: 'system', label: 'System', icon: AlertCircle, desc: 'Backup & Audit' },
+  const navGroups = [
+    {
+      label: 'Unternehmen',
+      items: [
+        { id: 'company', label: 'Stammdaten', icon: Building2, desc: 'Adresse & Kontakt' },
+        { id: 'legal', label: 'Rechtliches', icon: Scale, desc: 'AGB & Steuerregeln' },
+      ],
+    },
+    {
+      label: 'Dokumente',
+      items: [
+        { id: 'finance', label: 'Finanzen', icon: Landmark, desc: 'Bank & Steuern' },
+        { id: 'numbers', label: 'Nummernkreise', icon: FileDigit, desc: 'Rechnungs- & Kundennr.' },
+        { id: 'catalog', label: 'Kategorien', icon: Tags, desc: 'Produkte & Leistungen' },
+      ],
+    },
+    {
+      label: 'Kommunikation',
+      items: [
+        { id: 'email', label: 'E-Mail', icon: Mail, desc: 'SMTP & Resend' },
+        { id: 'dunning', label: 'Mahnwesen', icon: Megaphone, desc: 'Mahnstufen & Gebühren' },
+        { id: 'portal', label: 'Portal', icon: Globe, desc: 'Angebotslinks & Sync' },
+      ],
+    },
+    {
+      label: 'System',
+      items: [
+        { id: 'system', label: 'System', icon: AlertCircle, desc: 'Backup & Audit' },
+      ],
+    },
   ];
+  const navItems = navGroups.flatMap((g) => g.items);
 
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -1579,37 +1600,43 @@ export const SettingsView: React.FC = () => {
       {/* Sidebar Navigation */}
       <div className="w-72 bg-gray-50 border-r border-gray-100 p-8 flex flex-col">
         <h2 className="text-2xl font-black mb-8">Einstellungen</h2>
-        <nav className="space-y-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id as any)}
-                className={`w-full text-left p-4 rounded-2xl flex items-center gap-4 transition-all duration-300 group animate-enter ${
-                  isActive
-                    ? 'bg-white shadow-md ring-1 ring-black/5'
-                    : 'hover:bg-white hover:shadow-sm'
-                }`}
-                style={{ animationDelay: `${navItems.findIndex(n => n.id === item.id) * 30}ms` }}
-              >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                  isActive ? 'bg-black text-accent' : 'bg-gray-200 text-gray-500 group-hover:text-gray-700'
-                }`}>
-                  <Icon size={20} />
-                </div>
-                <div>
-                  <div className={`font-bold text-sm ${isActive ? 'text-black' : 'text-gray-600'}`}>
-                    {item.label}
-                  </div>
-                  <div className="text-[10px] font-medium text-gray-400">
-                    {item.desc}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+        <nav className="space-y-5">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">{group.label}</p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id as any)}
+                      className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all duration-200 group ${
+                        isActive
+                          ? 'bg-white shadow-md ring-1 ring-black/5'
+                          : 'hover:bg-white hover:shadow-sm'
+                      }`}
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                        isActive ? 'bg-black text-accent' : 'bg-gray-200 text-gray-500 group-hover:text-gray-700'
+                      }`}>
+                        <Icon size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`font-bold text-sm truncate ${isActive ? 'text-black' : 'text-gray-600'}`}>
+                          {item.label}
+                        </div>
+                        <div className="text-[10px] font-medium text-gray-400 truncate">
+                          {item.desc}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         
         <div className="mt-auto">
