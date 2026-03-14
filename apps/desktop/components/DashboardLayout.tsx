@@ -45,6 +45,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState('');
   const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(-1);
   const searchContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   const normalizedSearch = normalize(searchTerm);
@@ -147,6 +148,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
   const openSearchResult = (result: HeaderSearchResult) => {
     setSearchOpen(false);
     setSearchTerm('');
+    setSearchHighlightIndex(-1);
     navigate({ to: result.to });
   };
 
@@ -209,19 +211,35 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
                             onChange={(e) => {
                               setSearchTerm(e.target.value);
                               setSearchOpen(true);
+                              setSearchHighlightIndex(-1);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') {
                                 setSearchOpen(false);
+                                setSearchHighlightIndex(-1);
                                 return;
                               }
-                              if (e.key === 'Enter' && searchResults[0]) {
+                              if (e.key === 'ArrowDown') {
                                 e.preventDefault();
-                                openSearchResult(searchResults[0]);
+                                setSearchHighlightIndex((i) => Math.min(i + 1, searchResults.length - 1));
+                                return;
+                              }
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setSearchHighlightIndex((i) => Math.max(i - 1, 0));
+                                return;
+                              }
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const target = searchHighlightIndex >= 0
+                                  ? searchResults[searchHighlightIndex]
+                                  : searchResults[0];
+                                if (target) openSearchResult(target);
                               }
                             }}
                             placeholder="Suchen..."
-                            className="bg-transparent border-none outline-none text-sm font-medium w-20 focus:w-28 transition-all placeholder-gray-400"
+                            aria-label="Globale Suche"
+                            className="bg-transparent border-none outline-none text-sm font-medium w-44 focus:w-56 transition-all placeholder-gray-400"
                         />
                     </div>
 
@@ -247,7 +265,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
 
                         {normalizedSearch.length >= 2 && !searchLoading && searchResults.length > 0 && (
                           <div className="space-y-1">
-                            {searchResults.map((result) => {
+                            {searchResults.map((result, idx) => {
                               const Icon =
                                 result.badge === 'Kunde'
                                   ? Users
@@ -256,13 +274,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
                                     : result.badge === 'Artikel'
                                       ? Package
                                       : FileText;
+                              const isHighlighted = idx === searchHighlightIndex;
 
                               return (
                                 <button
                                   key={result.key}
                                   type="button"
                                   onClick={() => openSearchResult(result)}
-                                  className="w-full text-left rounded-xl border border-transparent hover:border-gray-200 hover:bg-gray-50 px-3 py-2 transition-colors"
+                                  onMouseEnter={() => setSearchHighlightIndex(idx)}
+                                  className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isHighlighted ? 'border-gray-200 bg-gray-50' : 'border-transparent hover:border-gray-200 hover:bg-gray-50'}`}
                                 >
                                   <div className="flex items-start gap-3">
                                     <span className="mt-0.5 w-6 h-6 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center">
@@ -298,13 +318,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
                     </button>
 
                     <button
-                        onClick={() => onNavigate('settings')}
-                        className="group relative w-9 h-9 bg-white border border-gray-200 hover:border-gray-300 rounded-xl flex items-center justify-center text-gray-500 hover:text-black transition-all duration-200 shadow-sm hover:-translate-y-0.5 hover:shadow-md"
-                        title="Benachrichtigungen"
-                        aria-label="Benachrichtigungen"
+                        disabled
+                        className="group relative w-9 h-9 bg-white border border-gray-200 rounded-xl flex items-center justify-center text-gray-300 cursor-default transition-all duration-200 shadow-sm"
+                        title="Benachrichtigungen (demnächst verfügbar)"
+                        aria-label="Benachrichtigungen (demnächst verfügbar)"
                     >
-                        <Bell size={16} className="transition-transform duration-300 group-hover:-rotate-6" />
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full ring-2 ring-white"></span>
+                        <Bell size={16} />
                     </button>
                 </div>
             </div>

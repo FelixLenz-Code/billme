@@ -99,6 +99,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [bulkDeleteReason, setBulkDeleteReason] = useState('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
+  // PDF path for "Öffnen" button in toast
+  const [pdfLastPath, setPdfLastPath] = useState<string | null>(null);
+
   // Payments (Invoice detail)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
@@ -211,8 +214,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           setToastMessage('PDF wird erstellt...');
           setShowShareToast(true);
           const res = await ipc.pdf.export({ kind: documentType, id: selectedDocument.id });
-          setToastMessage(`PDF gespeichert: ${res.path}`);
-          setTimeout(() => setShowShareToast(false), 3500);
+          setToastMessage(`PDF gespeichert`);
+          setPdfLastPath(res.path);
+          setTimeout(() => setShowShareToast(false), 5000);
         } catch (e) {
           setToastMessage(`PDF Fehler: ${String(e)}`);
           setTimeout(() => setShowShareToast(false), 5000);
@@ -248,7 +252,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const handleOpenOfferLink = () => {
     const url = getOfferPublicUrl();
     if (!url) {
-      setToastMessage('Portal Base URL fehlt (Settings -> Portal)');
+      setToastMessage('Portal-URL fehlt – bitte in Einstellungen → Portal hinterlegen.');
       setShowShareToast(true);
       setTimeout(() => setShowShareToast(false), 4000);
       return;
@@ -317,10 +321,13 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   // --- Email Logic ---
   const handleOpenEmail = () => {
       if(!selectedDocument) return;
+      const companyName = settings.company?.name?.trim() || 'Ihr Unternehmen';
+      const contactPerson = settings.company?.owner?.trim();
+      const signature = contactPerson ? `${contactPerson}\n${companyName}` : companyName;
       setEmailData({
           to: selectedDocument.clientEmail,
           subject: `${documentType === 'invoice' ? 'Rechnung' : 'Angebot'} ${selectedDocument.number}`,
-          message: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${documentType === 'invoice' ? 'Ihre Rechnung' : 'Ihr Angebot'} ${selectedDocument.number}.\n\nMit freundlichen Grüßen,\nMustermann GmbH`
+          message: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${documentType === 'invoice' ? 'Ihre Rechnung' : 'Ihr Angebot'} ${selectedDocument.number}.\n\nMit freundlichen Grüßen,\n${signature}`
       });
       setIsEmailModalOpen(true);
   };
@@ -880,6 +887,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                   <div className="absolute top-8 right-8 bg-black text-accent px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 z-50 animate-in fade-in slide-in-from-top-2">
                       <Check size={16} />
                       <span className="text-sm font-bold">{toastMessage}</span>
+                      {pdfLastPath && toastMessage === 'PDF gespeichert' && (
+                        <button
+                          onClick={() => void ipc.shell.openPath({ path: pdfLastPath })}
+                          className="ml-2 text-xs font-bold underline underline-offset-2 opacity-80 hover:opacity-100 transition-opacity"
+                        >
+                          Öffnen
+                        </button>
+                      )}
                   </div>
               )}
 
@@ -957,7 +972,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                                 if (!selectedDocument.shareToken) return;
                                 const baseUrl = settings.portal.baseUrl?.trim();
                                 if (!baseUrl) {
-                                  setToastMessage('Portal Base URL fehlt (Settings → Portal)');
+                                  setToastMessage('Portal-URL fehlt – bitte in Einstellungen → Portal hinterlegen.');
                                   setShowShareToast(true);
                                   setTimeout(() => setShowShareToast(false), 4000);
                                   return;
@@ -1445,6 +1460,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           <div className="absolute top-8 right-8 bg-black text-accent px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 z-50 animate-in fade-in slide-in-from-top-2">
               <Check size={16} />
               <span className="text-sm font-bold">{toastMessage}</span>
+              {pdfLastPath && toastMessage === 'PDF gespeichert' && (
+                <button
+                  onClick={() => void ipc.shell.openPath({ path: pdfLastPath })}
+                  className="ml-2 text-xs font-bold underline underline-offset-2 opacity-80 hover:opacity-100 transition-opacity"
+                >
+                  Öffnen
+                </button>
+              )}
           </div>
       )}
 
@@ -1481,15 +1504,18 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
            </div>
 
            <div className="flex gap-2">
-                {(['all', 'open', 'paid', 'overdue'] as const).map(s => (
-                    <button 
-                        key={s}
-                        onClick={() => setFilter(s)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filter === s ? 'bg-black text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                    >
-                        {s === 'all' ? 'Alle' : s.charAt(0).toUpperCase() + s.slice(1)}
-                    </button>
-                ))}
+                {(['all', 'open', 'paid', 'overdue'] as const).map(s => {
+                    const labels: Record<string, string> = { all: 'Alle', open: 'Offen', paid: 'Bezahlt', overdue: 'Überfällig' };
+                    return (
+                        <button
+                            key={s}
+                            onClick={() => setFilter(s)}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filter === s ? 'bg-black text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        >
+                            {labels[s]}
+                        </button>
+                    );
+                })}
            </div>
         </div>
 
@@ -1680,7 +1706,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           )) : (
               <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                   <FileText size={48} className="mb-4 opacity-20" />
-                  <p className="font-medium">Keine {documentType === 'invoice' ? 'Rechnungen' : 'Angebote'} gefunden</p>
+                  <p className="font-bold text-gray-500">
+                    {searchTerm || filter !== 'all'
+                      ? `Keine Treffer für die aktuelle Suche oder Filterung`
+                      : `Noch keine ${documentType === 'invoice' ? 'Rechnungen' : 'Angebote'} vorhanden`}
+                  </p>
+                  {!searchTerm && filter === 'all' && (
+                    <p className="text-sm mt-1">Klicke auf das + oben rechts, um {documentType === 'invoice' ? 'eine Rechnung' : 'ein Angebot'} zu erstellen.</p>
+                  )}
               </div>
           )}
       </div>

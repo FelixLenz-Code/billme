@@ -45,6 +45,7 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   const effectiveTemplate: InvoiceElement[] =
     (activeTemplate?.elements as InvoiceElement[] | undefined) ?? (templateType === 'offer' ? INITIAL_OFFER_TEMPLATE : INITIAL_INVOICE_TEMPLATE);
   const [selectedClientId, setSelectedClientId] = useState<string>(invoice.clientId ?? '');
+  const [isNumberLocked, setIsNumberLocked] = useState<boolean>(mode === 'edit');
   const [articleToAddId, setArticleToAddId] = useState<string>('');
   const { data: projects = [] } = useProjectsQuery(
     selectedClientId ? { clientId: selectedClientId, includeArchived: false } : undefined,
@@ -86,7 +87,7 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
           ...formData,
           items: [
               ...formData.items,
-              { description: 'Neue Position', quantity: 1, price: 0, total: 0, category: defaultCategory }
+              { description: '', quantity: 1, price: 0, total: 0, category: defaultCategory }
            ]
        });
    };
@@ -212,13 +213,38 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">Rechnungs-Nr.</label>
-                            <input 
-                                type="text" 
-                                value={formData.number}
-                                onChange={e => setFormData({...formData, number: e.target.value})}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
-                            />
+                            <label className="block text-xs font-bold text-gray-500 mb-1">
+                                {templateType === 'offer' ? 'Angebots-Nr.' : 'Rechnungs-Nr.'}
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={formData.number}
+                                    readOnly={isNumberLocked}
+                                    onChange={e => setFormData({...formData, number: e.target.value})}
+                                    className={`w-full bg-gray-50 border rounded-xl p-2.5 text-sm font-medium outline-none transition-colors ${isNumberLocked ? 'border-gray-200 text-gray-400 cursor-not-allowed pr-10' : 'border-warning focus:ring-2 focus:ring-warning'}`}
+                                />
+                                {mode === 'edit' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (isNumberLocked) {
+                                                const ok = window.confirm(
+                                                    'Achtung: Die manuelle Änderung der Nummer kann die GoBD-konforme Nummerierung gefährden.\n\nNur fortfahren, wenn Sie sicher sind.'
+                                                );
+                                                if (ok) setIsNumberLocked(false);
+                                            } else {
+                                                setIsNumberLocked(true);
+                                            }
+                                        }}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors"
+                                        title={isNumberLocked ? 'Nummer bearbeiten (GoBD-Warnung)' : 'Nummer sperren'}
+                                        aria-label={isNumberLocked ? 'Nummer entsperren' : 'Nummer sperren'}
+                                    >
+                                        {isNumberLocked ? <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> : <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1">Datum</label>
@@ -326,26 +352,35 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                             Positionen
                         </h3>
                         <div className="flex items-center gap-2">
-                            <select
-                                value={articleToAddId}
-                                onChange={(e) => {
-                                    const id = e.target.value;
-                                    setArticleToAddId(id);
-                                    const article = articles.find((a) => a.id === id);
-                                    if (article) {
-                                        handleAddArticleItem(article);
-                                        setArticleToAddId('');
-                                    }
-                                }}
-                                className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-accent"
-                            >
-                                <option value="">+ Artikel</option>
-                                {articles.map((a) => (
-                                    <option key={a.id} value={a.id}>
-                                        {a.title}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="flex items-center gap-1">
+                                <select
+                                    value={articleToAddId}
+                                    onChange={(e) => setArticleToAddId(e.target.value)}
+                                    className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-accent"
+                                >
+                                    <option value="">Artikel wählen...</option>
+                                    {articles.map((a) => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.title}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    disabled={!articleToAddId}
+                                    onClick={() => {
+                                        const article = articles.find((a) => a.id === articleToAddId);
+                                        if (article) {
+                                            handleAddArticleItem(article);
+                                            setArticleToAddId('');
+                                        }
+                                    }}
+                                    className="text-xs font-bold bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed text-gray-800 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+                                    title="Artikel zur Rechnung hinzufügen"
+                                >
+                                    <Plus size={12} /> Hinzufügen
+                                </button>
+                            </div>
                             <button 
                                 onClick={handleAddItem}
                                 className="text-xs font-bold bg-black text-accent px-2 py-1 rounded hover:bg-gray-800 transition-colors flex items-center gap-1"
