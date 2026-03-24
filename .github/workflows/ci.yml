@@ -54,5 +54,17 @@ jobs:
       - name: Desktop build
         run: pnpm -C apps/desktop build
 
+      - name: Pro desktop typecheck
+        run: pnpm -C apps/pro-desktop typecheck
+
+      - name: Pro desktop tests
+        run: pnpm -C apps/pro-desktop test --run
+
+      - name: Pro desktop e-invoice conformance tests
+        run: pnpm -C apps/pro-desktop test:einvoice
+
+      - name: Pro desktop build
+        run: pnpm -C apps/pro-desktop build
+
       - name: Offer portal build
         run: pnpm -C apps/offer-portal build

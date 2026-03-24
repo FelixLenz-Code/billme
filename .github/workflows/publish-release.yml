@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate (Typecheck + Tests)
+    name: Validate (Desktop + Pro)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,8 +47,14 @@ jobs:
       - name: Desktop tests
         run: pnpm -C apps/desktop test --run
 
+      - name: Pro typecheck
+        run: pnpm -C apps/pro-desktop typecheck
+
+      - name: Pro tests
+        run: pnpm -C apps/pro-desktop test --run
+
   build:
-    name: Build Desktop Release (${{ matrix.os }})
+    name: Build ${{ matrix.app.name }} Release (${{ matrix.os }})
     needs: [validate]
     runs-on: ${{ matrix.os }}
     strategy:
@@ -58,6 +64,11 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
+        app:
+          - name: desktop
+            dir: apps/desktop
+          - name: pro
+            dir: apps/pro-desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,27 +90,27 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install native app dependencies for Electron
-        run: pnpm -C apps/desktop exec electron-builder install-app-deps
+        run: pnpm -C ${{ matrix.app.dir }} exec electron-builder install-app-deps
 
       - name: Build distributables
-        run: pnpm -C apps/desktop build && pnpm -C apps/desktop exec electron-builder --config electron-builder.yml --publish never
+        run: pnpm -C ${{ matrix.app.dir }} build && pnpm -C ${{ matrix.app.dir }} exec electron-builder --config electron-builder.yml --publish never
 
       - name: Verify packaged native modules
-        run: node apps/desktop/scripts/verify-native-packaging.mjs
+        run: node ${{ matrix.app.dir }}/scripts/verify-native-packaging.mjs
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-release-${{ matrix.os }}-${{ env.RELEASE_TAG }}
+          name: ${{ matrix.app.name }}-release-${{ matrix.os }}-${{ env.RELEASE_TAG }}
           path: |
-            apps/desktop/release/**/*.AppImage
-            apps/desktop/release/**/*.dmg
-            apps/desktop/release/**/* Setup *.exe
-            apps/desktop/release/**/*.deb
-            apps/desktop/release/**/*.rpm
-            apps/desktop/release/**/*.zip
-            apps/desktop/release/**/*.blockmap
-            apps/desktop/release/**/latest*.yml
+            ${{ matrix.app.dir }}/release/**/*.AppImage
+            ${{ matrix.app.dir }}/release/**/*.dmg
+            ${{ matrix.app.dir }}/release/**/* Setup *.exe
+            ${{ matrix.app.dir }}/release/**/*.deb
+            ${{ matrix.app.dir }}/release/**/*.rpm
+            ${{ matrix.app.dir }}/release/**/*.zip
+            ${{ matrix.app.dir }}/release/**/*.blockmap
+            ${{ matrix.app.dir }}/release/**/latest*.yml
           if-no-files-found: error
 
   publish:
@@ -110,7 +121,7 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: desktop-release-*-${{ env.RELEASE_TAG }}
+          pattern: "*-release-*-${{ env.RELEASE_TAG }}"
           path: release-assets
           merge-multiple: true
 
