@@ -1,1 +1,1 @@
-export { logger } from '@billme/desktop-core';
+export * from '@billme/desktop-core/utils/logger';

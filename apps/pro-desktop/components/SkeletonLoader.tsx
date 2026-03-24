@@ -1,1 +1,1 @@
-export { SkeletonLoader } from '@billme/desktop-ui';
+export * from '@billme/desktop-ui/components/SkeletonLoader';

@@ -13,12 +13,33 @@
     "react-dom": "^19.0.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./utils/logger": "./src/utils/logger.ts",
-    "./utils/retry": "./src/utils/retry.ts",
-    "./ipc/errorHandler": "./src/ipc/errorHandler.ts",
-    "./hooks/useToast": "./src/hooks/useToast.ts",
-    "./services/emailService": "./src/services/emailService.ts",
-    "./state/notificationsStore": "./src/state/notificationsStore.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./utils/logger": {
+      "types": "./src/utils/logger.ts",
+      "default": "./src/utils/logger.ts"
+    },
+    "./utils/retry": {
+      "types": "./src/utils/retry.ts",
+      "default": "./src/utils/retry.ts"
+    },
+    "./ipc/errorHandler": {
+      "types": "./src/ipc/errorHandler.ts",
+      "default": "./src/ipc/errorHandler.ts"
+    },
+    "./hooks/useToast": {
+      "types": "./src/hooks/useToast.ts",
+      "default": "./src/hooks/useToast.ts"
+    },
+    "./services/emailService": {
+      "types": "./src/services/emailService.ts",
+      "default": "./src/services/emailService.ts"
+    },
+    "./state/notificationsStore": {
+      "types": "./src/state/notificationsStore.ts",
+      "default": "./src/state/notificationsStore.ts"
+    }
   }
 }

@@ -1,1 +1,1 @@
-export { Spinner } from '@billme/desktop-ui';
+export * from '@billme/desktop-ui/components/Spinner';
