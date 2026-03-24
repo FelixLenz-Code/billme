@@ -34,6 +34,8 @@
     "@billme/accounting-shared": "workspace:*",
     "@billme/accounting-ui-pro": "workspace:*",
     "@billme/desktop-core": "workspace:*",
+    "@billme/desktop-data": "workspace:*",
+    "@billme/desktop-services": "workspace:*",
     "@billme/desktop-ui": "workspace:*",
     "@billme/finance-intelligence": "workspace:*",
     "@billme/ui": "workspace:*",

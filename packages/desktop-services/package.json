@@ -1,0 +1,34 @@
+{
+  "name": "@billme/desktop-services",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@billme/finance-intelligence": "workspace:*",
+    "@billme/desktop-core": "workspace:*",
+    "iconv-lite": "^0.6.3",
+    "papaparse": "^5.5.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./portalClient": {
+      "types": "./src/portalClient.ts",
+      "default": "./src/portalClient.ts"
+    },
+    "./eurCatalog": {
+      "types": "./src/eurCatalog.ts",
+      "default": "./src/eurCatalog.ts"
+    },
+    "./eurSuggestion": {
+      "types": "./src/eurSuggestion.ts",
+      "default": "./src/eurSuggestion.ts"
+    },
+    "./csvImport": {
+      "types": "./src/csvImport.ts",
+      "default": "./src/csvImport.ts"
+    }
+  }
+}
