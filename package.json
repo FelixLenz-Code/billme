@@ -16,7 +16,9 @@
     "db:generate": "pnpm -C apps/desktop db:generate",
     "db:studio": "pnpm -C apps/desktop db:studio",
     "dist": "pnpm -C apps/desktop dist",
-    "deploy:demo": "pnpm -C apps/demo deploy:cf"
+    "deploy:demo": "pnpm -C apps/demo deploy:cf",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -24,5 +26,8 @@
       "better-sqlite3",
       "keytar"
     ]
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }
