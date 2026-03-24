@@ -163,6 +163,7 @@ export interface AppSettings {
     recentPaymentsLimit: number;
     topClientsLimit: number;
   };
+  onboardingCompleted?: boolean;
 }
 
 // --- Invoice Data Types ---

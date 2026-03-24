@@ -32,10 +32,20 @@ import { Invoice } from './types';
 import { useUpsertInvoiceMutation } from './hooks/useInvoices';
 import { useUpsertOfferMutation } from './hooks/useOffers';
 import { ipc } from './ipc/client';
+import { useSettingsQuery } from './hooks/useSettings';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import { ShortcutsModal } from './components/ShortcutsModal';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 const RootLayout: React.FC = () => {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [showShortcuts, setShowShortcuts] = React.useState(false);
+
+  const { data: settings } = useSettingsQuery();
+  const showOnboarding = Boolean(
+    settings && !settings.onboardingCompleted && !settings.company.name.trim()
+  );
 
   const activePage = (() => {
     if (pathname.startsWith('/finance') || pathname.startsWith('/accounts') || pathname.startsWith('/statistics') || pathname.startsWith('/eur'))
@@ -59,14 +69,34 @@ const RootLayout: React.FC = () => {
     navigate({ to });
   };
 
+  useKeyboardShortcuts({
+    onShowShortcuts: () => setShowShortcuts(true),
+    onNew: () => {
+      if (pathname.startsWith('/documents')) navigate({ to: '/documents' });
+      else if (pathname.startsWith('/clients')) navigate({ to: '/clients' });
+      else if (pathname.startsWith('/articles')) navigate({ to: '/articles' });
+    },
+  });
+
   return (
-    <DashboardLayout
-      activePage={activePage}
-      onNavigate={handleNavigate}
-      isEditorActive={isEditorActive}
-    >
-      <Outlet />
-    </DashboardLayout>
+    <>
+      <DashboardLayout
+        activePage={activePage}
+        onNavigate={handleNavigate}
+        isEditorActive={isEditorActive}
+      >
+        <Outlet />
+      </DashboardLayout>
+      {showOnboarding && settings && (
+        <OnboardingWizard
+          settings={settings}
+          onComplete={() => {
+            // Settings query will auto-refresh; wizard disappears when onboardingCompleted=true
+          }}
+        />
+      )}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+    </>
   );
 };
 

@@ -11,6 +11,12 @@ type UpdateStatusPayload = {
   progress?: number;
 };
 
+type NotificationPayload = {
+  type: string;
+  title: string;
+  message: string;
+};
+
 declare global {
   interface Window {
     billmeApi?: BillmeApi;
@@ -19,6 +25,8 @@ declare global {
       offMaximizeChanged: () => void;
       onUpdateStatusChanged: (callback: (payload: UpdateStatusPayload) => void) => void;
       offUpdateStatusChanged: () => void;
+      onNotification: (callback: (payload: NotificationPayload) => void) => void;
+      offNotification: () => void;
     };
   }
 }

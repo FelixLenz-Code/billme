@@ -282,6 +282,7 @@ export const SettingsSchema = z.object({
     recentPaymentsLimit: 5,
     topClientsLimit: 5,
   }),
+  onboardingCompleted: z.boolean().optional(),
 });
 
 // Tags schema (for clients)

@@ -1,10 +1,11 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Briefcase, Bell, FileText, Package, Search, Settings, Users } from 'lucide-react';
+import { Briefcase, Bell, FileText, Package, Search, Settings, Users, X, CheckCheck } from 'lucide-react';
 import { ipc } from '../ipc/client';
 import { Titlebar } from './Titlebar';
 import billmeFullLogo from '../assets/billme-full-logo.svg';
+import { useNotificationsStore, type AppNotification } from '../state/notificationsStore';
 
 type HeaderSearchResult = {
   key: string;
@@ -48,6 +49,37 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
   const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(-1);
   const searchContainerRef = React.useRef<HTMLDivElement | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const { notifications, addNotification, markAllRead, clearAll } = useNotificationsStore();
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const [notifPanelOpen, setNotifPanelOpen] = React.useState(false);
+  const notifPanelRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Subscribe to push notifications from the main process
+  React.useEffect(() => {
+    window.billmeWindow?.onNotification((payload) => {
+      addNotification({
+        type: payload.type as AppNotification['type'],
+        title: payload.title,
+        message: payload.message,
+      });
+    });
+    return () => {
+      window.billmeWindow?.offNotification();
+    };
+  }, [addNotification]);
+
+  // Close notification panel on outside click
+  React.useEffect(() => {
+    if (!notifPanelOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifPanelRef.current && !notifPanelRef.current.contains(e.target as Node)) {
+        setNotifPanelOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifPanelOpen]);
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -335,14 +367,77 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
                         <Settings size={16} className="transition-transform duration-300 group-hover:rotate-45" />
                     </button>
 
-                    <button
-                        disabled
-                        className="group relative w-9 h-9 bg-white border border-gray-200 rounded-xl flex items-center justify-center text-gray-300 cursor-default transition-all duration-200 shadow-sm"
-                        title="Benachrichtigungen (demnächst verfügbar)"
-                        aria-label="Benachrichtigungen (demnächst verfügbar)"
-                    >
+                    <div ref={notifPanelRef} className="relative">
+                      <button
+                        onClick={() => {
+                          setNotifPanelOpen((v) => !v);
+                          if (!notifPanelOpen && unreadCount > 0) markAllRead();
+                        }}
+                        className="group relative w-9 h-9 bg-white border border-gray-200 hover:border-gray-300 rounded-xl flex items-center justify-center text-gray-500 hover:text-black transition-all duration-200 shadow-sm hover:-translate-y-0.5 hover:shadow-md"
+                        title="Benachrichtigungen"
+                        aria-label="Benachrichtigungen"
+                      >
                         <Bell size={16} />
-                    </button>
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center leading-none">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {notifPanelOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-auto rounded-2xl border border-gray-200 bg-white shadow-xl z-50">
+                          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                            <span className="text-sm font-bold text-gray-900">Benachrichtigungen</span>
+                            <div className="flex items-center gap-2">
+                              {notifications.length > 0 && (
+                                <>
+                                  <button
+                                    onClick={markAllRead}
+                                    className="text-[10px] font-bold text-gray-400 hover:text-gray-700 flex items-center gap-1 transition-colors"
+                                    title="Alle als gelesen markieren"
+                                  >
+                                    <CheckCheck size={12} /> Alle gelesen
+                                  </button>
+                                  <button
+                                    onClick={clearAll}
+                                    className="text-[10px] font-bold text-gray-400 hover:text-gray-700 transition-colors"
+                                    title="Alle löschen"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {notifications.length === 0 ? (
+                            <div className="px-4 py-8 text-center text-sm text-gray-400">
+                              Keine Benachrichtigungen
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-50">
+                              {notifications.map((n) => (
+                                <div
+                                  key={n.id}
+                                  className={`px-4 py-3 ${n.read ? 'opacity-60' : 'bg-blue-50/30'}`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />}
+                                    <div className="min-w-0 flex-1" style={n.read ? { marginLeft: '14px' } : {}}>
+                                      <p className="text-xs font-bold text-gray-900">{n.title}</p>
+                                      <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
+                                      <p className="text-[10px] text-gray-400 mt-1">
+                                        {new Date(n.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                 </div>
             </div>
           </header>

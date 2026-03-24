@@ -2,6 +2,7 @@ import { getDb } from '../db/connection';
 import { getSettings } from '../db/settingsRepo';
 import { processDunningRun } from '../services/dunningService';
 import { secrets } from './secrets';
+import { pushNotification } from './notifications';
 import { logger } from '../utils/logger';
 
 let schedulerInterval: NodeJS.Timeout | null = null;
@@ -77,8 +78,21 @@ const executeDunningRun = async (): Promise<void> => {
       errors: result.errors.length,
     });
 
+    if (result.emailsSent > 0 || result.processedInvoices > 0) {
+      pushNotification({
+        type: 'dunning',
+        title: 'Mahnlauf abgeschlossen',
+        message: `${result.emailsSent} Mahnung${result.emailsSent !== 1 ? 'en' : ''} versendet, ${result.processedInvoices} Rechnung${result.processedInvoices !== 1 ? 'en' : ''} verarbeitet`,
+      });
+    }
+
     if (result.errors.length > 0) {
       logger.error('DunningScheduler', 'Errors during dunning run', undefined, { errors: result.errors });
+      pushNotification({
+        type: 'email',
+        title: 'Mahnlauf: Fehler aufgetreten',
+        message: `${result.errors.length} Fehler beim Mahnversand`,
+      });
     }
   } catch (error) {
     logger.error('DunningScheduler', 'Fatal error during dunning run', error as Error);

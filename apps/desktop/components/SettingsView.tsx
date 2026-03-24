@@ -193,7 +193,7 @@ export const SettingsView: React.FC = () => {
     setSettings(prev => ({
       ...prev,
       [section]: {
-        ...prev[section],
+        ...(prev[section] as Record<string, unknown>),
         [field]: value
       }
     }));

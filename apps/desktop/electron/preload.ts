@@ -23,6 +23,8 @@ const WINDOW_MAXIMIZE_CHANGED_CHANNEL = 'window:maximize-changed';
 
 const UPDATE_STATUS_CHANGED_CHANNEL = 'updater:status-changed';
 
+const NOTIFICATION_CHANNEL = 'app:notification';
+
 contextBridge.exposeInMainWorld('billmeWindow', {
   onMaximizeChanged: (callback: (state: { isMaximized: boolean }) => void) => {
     const listener = (_event: unknown, payload: { isMaximized: boolean }) => {
@@ -51,5 +53,19 @@ contextBridge.exposeInMainWorld('billmeWindow', {
   },
   offUpdateStatusChanged: () => {
     ipcRenderer.removeAllListeners(UPDATE_STATUS_CHANGED_CHANNEL);
+  },
+  onNotification: (
+    callback: (payload: { type: string; title: string; message: string }) => void,
+  ) => {
+    const listener = (
+      _event: unknown,
+      payload: { type: string; title: string; message: string },
+    ) => {
+      callback(payload);
+    };
+    ipcRenderer.on(NOTIFICATION_CHANNEL, listener);
+  },
+  offNotification: () => {
+    ipcRenderer.removeAllListeners(NOTIFICATION_CHANNEL);
   },
 });

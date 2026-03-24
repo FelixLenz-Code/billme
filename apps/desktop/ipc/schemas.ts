@@ -463,6 +463,7 @@ export const appSettingsSchema = z.object({
       recentPaymentsLimit: 5,
       topClientsLimit: 5,
     }),
+  onboardingCompleted: z.boolean().optional(),
 });
 
 export const upsertClientPayloadSchema = z.object({

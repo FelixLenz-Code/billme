@@ -126,3 +126,13 @@ export const setSettings = (db: Database.Database, settings: AppSettings): void 
     `,
   ).run({ json: JSON.stringify(settings) });
 };
+
+export const setLastRecurringRun = (db: Database.Database, timestamp: string): void => {
+  db.prepare(
+    `
+      UPDATE settings
+      SET settings_json = json_set(settings_json, '$.automation.lastRecurringRun', @ts)
+      WHERE id = 1
+    `,
+  ).run({ ts: timestamp });
+};

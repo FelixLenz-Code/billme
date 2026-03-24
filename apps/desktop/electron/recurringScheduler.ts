@@ -1,6 +1,7 @@
 import { getDb } from '../db/connection';
-import { getSettings, setSettings } from '../db/settingsRepo';
+import { getSettings, setLastRecurringRun } from '../db/settingsRepo';
 import { processRecurringRun, RecurringResult } from '../services/recurringService';
+import { pushNotification } from './notifications';
 import { logger } from '../utils/logger';
 
 let schedulerInterval: NodeJS.Timeout | null = null;
@@ -85,21 +86,22 @@ const executeRecurringRun = async (): Promise<void> => {
       errors: result.errors.length,
     });
 
+    if (result.generated > 0) {
+      pushNotification({
+        type: 'recurring',
+        title: 'Abo-Rechnungen erstellt',
+        message: `${result.generated} Rechnung${result.generated !== 1 ? 'en' : ''} automatisch generiert`,
+      });
+    }
+
     if (result.errors.length > 0) {
       logger.error('RecurringScheduler', 'Errors during generation', undefined, {
         errors: result.errors,
       });
     }
 
-    // Update last run timestamp
-    const updatedSettings = {
-      ...settings,
-      automation: {
-        ...settings.automation,
-        lastRecurringRun: new Date().toISOString(),
-      },
-    };
-    setSettings(db, updatedSettings);
+    // Update last run timestamp (targeted update avoids full settings replace race)
+    setLastRecurringRun(db, new Date().toISOString());
   } catch (error) {
     logger.error('RecurringScheduler', 'Fatal error during recurring generation', error as Error);
   } finally {

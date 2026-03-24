@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { AppSettings, Article, Client, Invoice, InvoiceElement, InvoiceItem } from '../types';
 import { CanvasElement } from './CanvasElement';
 import { INITIAL_INVOICE_TEMPLATE, INITIAL_OFFER_TEMPLATE, A4_WIDTH_PX, A4_HEIGHT_PX } from '../constants';
-import { ArrowLeft, Save, Plus, Trash2, Calendar, User, FileText, Calculator, Euro } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Calendar, User, FileText, Calculator, Euro, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { MOCK_SETTINGS } from '../data/mockData';
 import { ElementType } from '../types';
 import { getPreviewElements } from '../utils/documentPreview';
@@ -13,6 +13,7 @@ import { useClientsQuery } from '../hooks/useClients';
 import { useArticlesQuery } from '../hooks/useArticles';
 import { useProjectsQuery } from '../hooks/useProjects';
 import { formatAddressMultiline } from '../utils/formatters';
+import { useUiStore } from '../state/uiStore';
 
 interface InvoiceDocumentEditorProps {
   invoice: Invoice;
@@ -37,6 +38,8 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   const currencyFormatter = useMemo(() => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }), []);
   const formatCurrency = (amount: number) => currencyFormatter.format(amount);
   const [formData, setFormData] = useState<Invoice>(invoice);
+  const sidebarCollapsed = useUiStore((s) => s.editorSidebarCollapsed);
+  const setSidebarCollapsed = useUiStore((s) => s.setEditorSidebarCollapsed);
   const { data: clients = [] } = useClientsQuery();
   const { data: articles = [] } = useArticlesQuery();
   const { data: settingsFromDb } = useSettingsQuery();
@@ -187,7 +190,9 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   return (
     <div className="flex h-full w-full bg-[#f3f4f6] overflow-hidden">
         {/* Left Sidebar: Form Editor */}
-        <div className="w-[450px] flex flex-col bg-white border-r border-gray-200 h-full shadow-xl z-10">
+        <div
+          className={`flex flex-col bg-white border-r border-gray-200 h-full shadow-xl z-10 transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-[450px]'}`}
+        >
             {/* Header */}
             <div className="p-6 border-b border-gray-100 bg-white">
                 <button 
@@ -486,6 +491,14 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
 
         {/* Right Area: Live Preview */}
         <div className="flex-1 bg-[#555] overflow-auto flex justify-center p-8 relative">
+            {/* Sidebar toggle */}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="absolute top-4 left-4 z-10 w-9 h-9 bg-white/15 hover:bg-white/25 rounded-xl flex items-center justify-center text-white/70 hover:text-white transition-all"
+              title={sidebarCollapsed ? 'Seitenleiste einblenden' : 'Seitenleiste ausblenden'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
             <div className="flex flex-col items-center">
                 <div className="mb-4 text-white/50 text-xs font-medium uppercase tracking-wider flex items-center gap-2">
                     Live Vorschau
