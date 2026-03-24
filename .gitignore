@@ -30,6 +30,17 @@ AGENTS.md
 .claude
 
 apps/desktop/release/
+apps/desktop/coverage/
+apps/pro-desktop/dist/
+apps/pro-desktop/release/
+apps/pro-desktop/coverage/
+apps/pro-desktop/node_modules/
+apps/pro-desktop/.test-logs/
+apps/pro-desktop/.artifacts/
 .playwright-cli/
+.pnpm-store/
+test-results/
 apps/demo/.wrangler/
+doppelteBuchhaltung/*
+!doppelteBuchhaltung/skr-kontenrahmen.sqlite
 CLAUDE.md

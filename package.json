@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "dev": "pnpm -C apps/desktop dev",
+    "dev:pro": "pnpm -C apps/pro-desktop dev",
     "dev:demo": "pnpm -C apps/demo dev",
     "dev:landing": "pnpm -C apps/landing-page dev",
     "dev:renderer": "pnpm -C apps/desktop dev:renderer",
