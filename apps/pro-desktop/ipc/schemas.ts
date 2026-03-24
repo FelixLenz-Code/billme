@@ -1,0 +1,831 @@
+import { z } from 'zod';
+
+const isAllowedPortalBaseUrl = (value: string): boolean => {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  try {
+    const parsed = new URL(trimmed);
+    const hostname = parsed.hostname.toLowerCase();
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+    return parsed.protocol === 'https:' || (parsed.protocol === 'http:' && isLocalhost);
+  } catch {
+    return false;
+  }
+};
+
+export const invoiceItemSchema = z.object({
+  description: z.string(),
+  quantity: z.number(),
+  price: z.number(),
+  total: z.number(),
+  articleId: z.string().optional(),
+  category: z.string().optional(),
+});
+
+export const paymentSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  method: z.string(),
+});
+
+export const invoiceSchema = z.object({
+  id: z.string(),
+  clientId: z.string().optional(),
+  clientNumber: z.string().optional(),
+  projectId: z.string().optional(),
+  number: z.string(),
+  numberReservationId: z.string().optional(),
+  client: z.string(),
+  clientEmail: z.string(),
+  clientAddress: z.string().optional(),
+  billingAddressJson: z.unknown().optional(),
+  shippingAddressJson: z.unknown().optional(),
+  shareToken: z.string().nullable().optional(),
+  sharePublishedAt: z.string().nullable().optional(),
+  shareDecision: z.enum(['accepted', 'declined']).nullable().optional(),
+  shareDecisionTextVersion: z.string().nullable().optional(),
+  acceptedAt: z.string().nullable().optional(),
+  acceptedBy: z.string().nullable().optional(),
+  acceptedEmail: z.string().nullable().optional(),
+  acceptedUserAgent: z.string().nullable().optional(),
+  date: z.string(),
+  dueDate: z.string(),
+  servicePeriod: z.string().optional(),
+  amount: z.number(),
+  status: z.enum(['paid', 'open', 'overdue', 'draft', 'cancelled']),
+  dunningLevel: z.number().optional(),
+  items: z.array(invoiceItemSchema),
+  payments: z.array(paymentSchema),
+  history: z.array(z.object({ date: z.string(), action: z.string() })).optional(),
+});
+
+export const upsertPayloadSchema = z.object({
+  reason: z.string().min(1),
+  invoice: invoiceSchema,
+});
+
+export const upsertOfferPayloadSchema = z.object({
+  reason: z.string().min(1),
+  offer: invoiceSchema,
+});
+
+export const activitySchema = z.object({
+  id: z.string(),
+  type: z.enum(['note', 'email', 'call', 'meeting']),
+  content: z.string(),
+  date: z.string(),
+  author: z.string(),
+});
+
+export const projectSchema = z.object({
+  id: z.string(),
+  clientId: z.string().optional(),
+  code: z.string().optional(),
+  name: z.string(),
+  status: z.enum(['active', 'completed', 'planned', 'on_hold', 'inactive', 'archived']),
+  budget: z.number(),
+  startDate: z.string(),
+  endDate: z.string().optional(),
+  description: z.string().optional(),
+  archivedAt: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export const clientSchema = z.object({
+  id: z.string(),
+  customerNumber: z.string().optional(),
+  company: z.string(),
+  contactPerson: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  address: z.string(),
+  status: z.enum(['active', 'inactive']),
+  avatar: z.string().optional(),
+  tags: z.array(z.string()),
+  notes: z.string(),
+  projects: z.array(projectSchema),
+  activities: z.array(activitySchema),
+  addresses: z
+    .array(
+      z.object({
+        id: z.string(),
+        clientId: z.string(),
+        label: z.string(),
+        kind: z.enum(['billing', 'shipping', 'other']),
+        company: z.string().optional(),
+        contactPerson: z.string().optional(),
+        street: z.string(),
+        line2: z.string().optional(),
+        zip: z.string(),
+        city: z.string(),
+        country: z.string(),
+        isDefaultBilling: z.boolean().optional(),
+        isDefaultShipping: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  emails: z
+    .array(
+      z.object({
+        id: z.string(),
+        clientId: z.string(),
+        label: z.string(),
+        kind: z.enum(['general', 'billing', 'shipping', 'other']),
+        email: z.string(),
+        isDefaultGeneral: z.boolean().optional(),
+        isDefaultBilling: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+});
+
+export const articleSchema = z.object({
+  id: z.string(),
+  sku: z.string().optional(),
+  title: z.string(),
+  description: z.string(),
+  price: z.number(),
+  unit: z.string(),
+  category: z.string(),
+  taxRate: z.number(),
+});
+
+export const transactionSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  type: z.enum(['income', 'expense']),
+  counterparty: z.string(),
+  purpose: z.string(),
+  linkedInvoiceId: z.string().optional(),
+  status: z.enum(['pending', 'booked', 'open', 'matched']),
+  accountId: z.string().optional(),
+  dedupHash: z.string().optional(),
+  importBatchId: z.string().optional(),
+  suggestedAccountNumber: z.string().optional(),
+  suggestionReason: z.string().optional(),
+  suggestionLayer: z.enum(['rule', 'counterparty', 'bayes', 'keyword', 'fallback']).optional(),
+  suggestionConfidence: z.number().optional(),
+});
+
+export const eurLineSchema = z.object({
+  id: z.string(),
+  taxYear: z.number().int(),
+  kennziffer: z.string().optional(),
+  label: z.string(),
+  kind: z.enum(['income', 'expense', 'computed']),
+  exportable: z.boolean(),
+  sortOrder: z.number().int(),
+  computedFromIds: z.array(z.string()),
+  sourceVersion: z.string(),
+});
+
+export const eurClassificationSchema = z.object({
+  id: z.string(),
+  sourceType: z.enum(['transaction', 'invoice']),
+  sourceId: z.string(),
+  taxYear: z.number().int(),
+  eurLineId: z.string().optional(),
+  excluded: z.boolean(),
+  vatMode: z.enum(['none', 'default']),
+  note: z.string().optional(),
+  updatedAt: z.string(),
+});
+
+export const eurReportRowSchema = z.object({
+  lineId: z.string(),
+  kennziffer: z.string().optional(),
+  label: z.string(),
+  kind: z.enum(['income', 'expense', 'computed']),
+  exportable: z.boolean(),
+  total: z.number(),
+  sortOrder: z.number().int(),
+});
+
+export const eurReportResultSchema = z.object({
+  taxYear: z.number().int(),
+  from: z.string(),
+  to: z.string(),
+  rows: z.array(eurReportRowSchema),
+  summary: z.object({
+    incomeTotal: z.number(),
+    expenseTotal: z.number(),
+    surplus: z.number(),
+  }),
+  unclassifiedCount: z.number().int(),
+  warnings: z.array(z.string()),
+});
+
+export const eurListItemsArgsSchema = z.object({
+  taxYear: z.number().int().min(2025),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  onlyUnclassified: z.boolean().optional(),
+  sourceType: z.enum(['transaction', 'invoice']).optional(),
+  flowType: z.enum(['income', 'expense']).optional(),
+  status: z.enum(['all', 'unclassified', 'classified', 'excluded']).optional(),
+  search: z.string().optional(),
+  accountId: z.string().optional(),
+  limit: z.number().int().positive().max(1000).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+export const eurListItemSchema = z.object({
+  sourceType: z.enum(['transaction', 'invoice']),
+  sourceId: z.string(),
+  date: z.string(),
+  amountGross: z.number(),
+  amountNet: z.number(),
+  flowType: z.enum(['income', 'expense']),
+  accountId: z.string().optional(),
+  linkedViaInvoice: z.boolean().optional(),
+  counterparty: z.string(),
+  purpose: z.string(),
+  suggestedLineId: z.string().optional(),
+  suggestionReason: z.string().optional(),
+  suggestionLayer: z.enum(['rule', 'counterparty', 'bayes', 'keyword']).optional(),
+  classification: eurClassificationSchema.optional(),
+  line: eurLineSchema.optional(),
+});
+
+export const eurGetReportArgsSchema = z.object({
+  taxYear: z.number().int().min(2025),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+export const eurUpsertClassificationArgsSchema = z.object({
+  sourceType: z.enum(['transaction', 'invoice']),
+  sourceId: z.string().min(1),
+  taxYear: z.number().int().min(2025),
+  eurLineId: z.string().optional(),
+  excluded: z.boolean().optional(),
+  vatMode: z.enum(['none', 'default']).optional(),
+  note: z.string().optional(),
+});
+
+export const eurExportCsvArgsSchema = z.object({
+  taxYear: z.number().int().min(2025),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+export const eurExportPdfArgsSchema = z.object({
+  taxYear: z.number().int().min(2025),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+export const eurExportPdfResultSchema = z.object({
+  path: z.string().min(1),
+});
+
+export const eurRuleSchema = z.object({
+  id: z.string(),
+  taxYear: z.number().int(),
+  priority: z.number().int(),
+  field: z.enum(['counterparty', 'purpose', 'any']),
+  operator: z.enum(['contains', 'equals', 'startsWith']),
+  value: z.string(),
+  targetEurLineId: z.string(),
+  active: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const eurListRulesArgsSchema = z.object({
+  taxYear: z.number().int().min(2025),
+});
+
+export const eurUpsertRuleArgsSchema = z.object({
+  id: z.string().optional(),
+  taxYear: z.number().int().min(2025),
+  priority: z.number().int(),
+  field: z.enum(['counterparty', 'purpose', 'any']),
+  operator: z.enum(['contains', 'equals', 'startsWith']),
+  value: z.string().min(1),
+  targetEurLineId: z.string().min(1),
+  active: z.boolean().optional(),
+});
+
+export const eurDeleteRuleArgsSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const accountSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  iban: z.string(),
+  balance: z.number(),
+  defaultSkrAccountNumber: z.string().min(1),
+  transactions: z.array(transactionSchema),
+  type: z.enum(['bank', 'paypal', 'cash', 'checking', 'savings', 'credit', 'other']),
+  color: z.string(),
+});
+
+export const ledgerChartSchema = z.enum(['SKR03', 'SKR04']);
+
+export const taxCaseKeySchema = z.enum([
+  'DE_STD_19',
+  'DE_STD_7',
+  'DE_ZERO_EXEMPT',
+  'DE_KU19',
+  'DE_RC_13B_DOMESTIC',
+  'EU_B2C_OSS',
+  'DE_MARGIN_25A',
+  'DE_BAUABZUG_48',
+  'DE_TRIANGULAR_25B',
+  'EU_B2B_SERVICE_RC',
+  'EU_IGL_GOODS_0',
+  'EU_IGE_GOODS_RC',
+  'NON_EU_EXPORT_0',
+  'NON_EU_SERVICE_RC',
+]);
+
+export const taxCaseDefinitionSchema = z.object({
+  key: taxCaseKeySchema,
+  label: z.string(),
+  mechanism: z.enum(['standard_vat', 'reverse_charge', 'zero_rate', 'exempt']),
+  defaultRate: z.number(),
+  requiresCounterpartyVatId: z.boolean(),
+  requiresCountry: z.boolean(),
+  requiresEvidence: z.boolean(),
+  active: z.boolean(),
+});
+
+export const taxCaseAccountMappingSchema = z.object({
+  id: z.string(),
+  chart: ledgerChartSchema,
+  taxCaseKey: taxCaseKeySchema,
+  role: z.enum(['output_tax', 'input_tax', 'datev_bu']),
+  accountNumber: z.string(),
+  datevBuKey: z.string().optional(),
+  validFrom: z.string().optional(),
+  validTo: z.string().optional(),
+  updatedAt: z.string(),
+});
+
+export const proListTaxCasesArgsSchema = z.object({
+  activeOnly: z.boolean().optional(),
+});
+
+export const proListTaxCaseAccountMappingsArgsSchema = z.object({
+  chart: ledgerChartSchema.optional(),
+  taxCaseKey: taxCaseKeySchema.optional(),
+});
+
+export const proUpsertTaxCaseAccountMappingArgsSchema = z.object({
+  id: z.string().optional(),
+  chart: ledgerChartSchema,
+  taxCaseKey: taxCaseKeySchema,
+  role: z.enum(['output_tax', 'input_tax', 'datev_bu']),
+  accountNumber: z.string().min(1),
+  datevBuKey: z.string().optional(),
+  validFrom: z.string().optional(),
+  validTo: z.string().optional(),
+});
+
+export const ledgerAccountSchema = z.object({
+  id: z.string(),
+  chart: ledgerChartSchema,
+  accountNumber: z.string(),
+  name: z.string(),
+  keywords: z.array(z.string()).optional(),
+  source: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const accountSuggestionRuleSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  chart: ledgerChartSchema,
+  priority: z.number().int(),
+  field: z.enum(['counterparty', 'purpose', 'any']),
+  operator: z.enum(['contains', 'equals', 'startsWith']),
+  value: z.string(),
+  targetAccountNumber: z.string(),
+  flowType: z.enum(['income', 'expense', 'any']),
+  active: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const proListAccountSuggestionRulesArgsSchema = z.object({
+  chart: ledgerChartSchema.optional(),
+  activeOnly: z.boolean().optional(),
+});
+
+export const proUpsertAccountSuggestionRuleArgsSchema = z.object({
+  id: z.string().optional(),
+  chart: ledgerChartSchema,
+  priority: z.number().int(),
+  field: z.enum(['counterparty', 'purpose', 'any']),
+  operator: z.enum(['contains', 'equals', 'startsWith']),
+  value: z.string().min(1),
+  targetAccountNumber: z.string().min(1),
+  flowType: z.enum(['income', 'expense', 'any']).optional(),
+  active: z.boolean().optional(),
+});
+
+export const proDeleteAccountSuggestionRuleArgsSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const proWorkflowEntrySchema = z.object({
+  transactionId: z.string().min(1),
+  transactionJson: z.string().min(2),
+  draftJson: z.string().min(2),
+  updatedAt: z.string(),
+});
+
+export const bookingDraftLineEntitySchema = z.object({
+  id: z.string(),
+  accountNumber: z.string(),
+  debitAmount: z.number(),
+  creditAmount: z.number(),
+  taxCode: z.string().optional(),
+  taxCaseKey: taxCaseKeySchema.optional(),
+  taxRate: z.number().optional(),
+  netAmount: z.number().optional(),
+  taxAmount: z.number().optional(),
+  grossAmount: z.number().optional(),
+  countryCode: z.string().optional(),
+  counterpartyVatId: z.string().optional(),
+  evidenceType: z.string().optional(),
+  evidenceReference: z.string().optional(),
+  costCenter: z.string().optional(),
+  memo: z.string().optional(),
+});
+
+export const draftValidationIssueSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  severity: z.enum(['error', 'warning', 'info']),
+  message: z.string(),
+  fieldPath: z.string().optional(),
+  blocking: z.boolean(),
+  source: z.enum(['system', 'user', 'rule']),
+});
+
+export const bookingDraftEntitySchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  transactionId: z.string(),
+  workflowStatus: z.enum([
+    'imported',
+    'suggested',
+    'incomplete',
+    'ready_for_review',
+    'pending_approval',
+    'approved',
+    'posted',
+    'reversed',
+    'corrected',
+    'period_locked',
+    'integration_error',
+  ]),
+  postingDate: z.string().optional(),
+  documentDate: z.string().optional(),
+  bookingText: z.string(),
+  reference: z.string().optional(),
+  period: z.string(),
+  fiscalYear: z.number().int(),
+  lines: z.array(bookingDraftLineEntitySchema),
+  validationIssues: z.array(draftValidationIssueSchema),
+  updatedAt: z.string(),
+});
+
+export const journalLineEntitySchema = z.object({
+  id: z.string(),
+  accountNumber: z.string(),
+  debitAmount: z.number(),
+  creditAmount: z.number(),
+  taxCode: z.string().optional(),
+  taxCaseKey: taxCaseKeySchema.optional(),
+  taxRate: z.number().optional(),
+  netAmount: z.number().optional(),
+  taxAmount: z.number().optional(),
+  grossAmount: z.number().optional(),
+  countryCode: z.string().optional(),
+  counterpartyVatId: z.string().optional(),
+  evidenceType: z.string().optional(),
+  evidenceReference: z.string().optional(),
+  costCenter: z.string().optional(),
+  memo: z.string().optional(),
+});
+
+export const proValidateTaxComplianceArgsSchema = z
+  .object({
+    draftId: z.string().min(1).optional(),
+    transactionId: z.string().min(1).optional(),
+  })
+  .refine((value) => Boolean(value.draftId || value.transactionId), {
+    message: 'draftId or transactionId is required',
+  });
+
+export const proValidateTaxComplianceResultSchema = z.object({
+  ok: z.boolean(),
+  issues: z.array(draftValidationIssueSchema),
+});
+
+export const journalEntryEntitySchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  entryNumber: z.number().int(),
+  postingDate: z.string(),
+  documentDate: z.string().optional(),
+  bookingText: z.string(),
+  reference: z.string().optional(),
+  period: z.string(),
+  fiscalYear: z.number().int(),
+  status: z.enum(['posted', 'reversed']),
+  sourceDraftId: z.string().optional(),
+  reversedEntryId: z.string().optional(),
+  createdAt: z.string(),
+  lines: z.array(journalLineEntitySchema),
+});
+
+export const ledgerBalanceRowSchema = z.object({
+  accountNumber: z.string(),
+  openingBalance: z.number(),
+  debitTurnover: z.number(),
+  creditTurnover: z.number(),
+  closingBalance: z.number(),
+});
+
+export const datevExportResultSchema = z.object({
+  id: z.string(),
+  filePath: z.string(),
+  recordCount: z.number().int(),
+  fromDate: z.string().optional(),
+  toDate: z.string().optional(),
+  createdAt: z.string(),
+});
+
+export const recurringProfileSchema = z.object({
+  id: z.string(),
+  clientId: z.string(),
+  active: z.boolean(),
+  name: z.string(),
+  interval: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']),
+  nextRun: z.string(),
+  lastRun: z.string().optional(),
+  endDate: z.string().optional(),
+  amount: z.number(),
+  items: z.array(invoiceItemSchema),
+});
+
+export const dunningLevelSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  enabled: z.boolean(),
+  daysAfterDueDate: z.number(),
+  fee: z.number(),
+  subject: z.string(),
+  text: z.string(),
+});
+
+export const appSettingsSchema = z.object({
+  company: z.object({
+    name: z.string(),
+    owner: z.string(),
+    street: z.string(),
+    zip: z.string(),
+    city: z.string(),
+    email: z.string(),
+    phone: z.string(),
+    website: z.string(),
+  }),
+  catalog: z
+    .object({
+      categories: z.array(
+        z.object({
+          id: z.string().min(1),
+          name: z.string().min(1),
+        }),
+      ),
+    })
+    .default({ categories: [] }),
+  finance: z.object({
+    bankName: z.string(),
+    iban: z.string(),
+    bic: z.string(),
+    taxId: z.string(),
+    vatId: z.string(),
+    registerCourt: z.string(),
+  }),
+  numbers: z.object({
+    invoicePrefix: z.string(),
+    nextInvoiceNumber: z.number(),
+    numberLength: z.number(),
+    offerPrefix: z.string(),
+    nextOfferNumber: z.number(),
+    customerPrefix: z.string().default('KD-'),
+    nextCustomerNumber: z.number().default(1),
+    customerNumberLength: z.number().default(4),
+  }),
+  dunning: z.object({
+    levels: z.array(dunningLevelSchema),
+  }),
+  legal: z.object({
+    smallBusinessRule: z.boolean(),
+    defaultVatRate: z.number(),
+    taxAccountingMethod: z.enum(['soll', 'ist']).default('soll'),
+    paymentTermsDays: z.number(),
+    defaultIntroText: z.string(),
+    defaultFooterText: z.string(),
+  }),
+  portal: z
+    .object({
+      baseUrl: z.string().default('').refine(
+        isAllowedPortalBaseUrl,
+        'Portal baseUrl must use https (except localhost)',
+      ),
+    })
+    .default({ baseUrl: '' }),
+  eInvoice: z
+    .object({
+      enabled: z.boolean().default(false),
+      standard: z.literal('zugferd-en16931').default('zugferd-en16931'),
+      profile: z.literal('EN16931').default('EN16931'),
+      version: z.literal('2.3').default('2.3'),
+    })
+    .default({
+      enabled: false,
+      standard: 'zugferd-en16931',
+      profile: 'EN16931',
+      version: '2.3',
+    }),
+  email: z
+    .object({
+      provider: z.enum(['smtp', 'resend', 'none']).default('none'),
+      smtpHost: z.string().default(''),
+      smtpPort: z.number().default(587),
+      smtpSecure: z.boolean().default(true),
+      smtpUser: z.string().default(''),
+      fromName: z.string().default(''),
+      fromEmail: z.string().default(''),
+    })
+    .default({
+      provider: 'none',
+      smtpHost: '',
+      smtpPort: 587,
+      smtpSecure: true,
+      smtpUser: '',
+      fromName: '',
+      fromEmail: '',
+    }),
+  automation: z
+    .object({
+      dunningEnabled: z.boolean().default(false),
+      dunningRunTime: z.string().default('09:00'),
+      lastDunningRun: z.string().optional(),
+      recurringEnabled: z.boolean().default(false),
+      recurringRunTime: z.string().default('03:00'),
+      lastRecurringRun: z.string().optional(),
+    })
+    .default({
+      dunningEnabled: false,
+      dunningRunTime: '09:00',
+      recurringEnabled: false,
+      recurringRunTime: '03:00',
+    }),
+  dashboard: z
+    .object({
+      monthlyRevenueGoal: z.number().default(30000),
+      dueSoonDays: z.number().int().min(1).default(7),
+      topCategoriesLimit: z.number().int().min(1).max(20).default(5),
+      recentPaymentsLimit: z.number().int().min(1).max(20).default(5),
+      topClientsLimit: z.number().int().min(1).max(20).default(5),
+    })
+    .default({
+      monthlyRevenueGoal: 30000,
+      dueSoonDays: 7,
+      topCategoriesLimit: 5,
+      recentPaymentsLimit: 5,
+      topClientsLimit: 5,
+    }),
+  onboardingCompleted: z.boolean().optional(),
+});
+
+export const upsertClientPayloadSchema = z.object({
+  client: clientSchema,
+});
+
+export const deleteByIdSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const upsertArticlePayloadSchema = z.object({
+  article: articleSchema,
+});
+
+export const upsertAccountPayloadSchema = z.object({
+  account: accountSchema,
+});
+
+export const upsertRecurringPayloadSchema = z.object({
+  profile: recurringProfileSchema,
+});
+
+export const csvProfileSchema = z.enum(['auto', 'fints', 'paypal', 'stripe', 'generic']);
+
+export const csvMappingSchema = z.object({
+  dateColumn: z.string().min(1),
+  amountColumn: z.string().min(1),
+  counterpartyColumn: z.string().optional(),
+  purposeColumn: z.string().optional(),
+  statusColumn: z.string().optional(),
+  externalIdColumn: z.string().optional(),
+  currencyColumn: z.string().optional(),
+  currencyExpected: z.string().optional(),
+});
+
+export const financeImportPreviewSchema = z.object({
+  path: z.string().min(1),
+  profile: csvProfileSchema.optional(),
+  mapping: csvMappingSchema.optional(),
+  encoding: z.enum(['utf8', 'win1252']).optional(),
+  delimiter: z.string().optional(),
+  maxRows: z.number().int().min(1).max(200).optional(),
+  accountIdForDedupHash: z.string().optional(),
+});
+
+export const financeImportCommitSchema = z.object({
+  path: z.string().min(1),
+  accountId: z.string().min(1),
+  profile: csvProfileSchema.optional(),
+  mapping: csvMappingSchema,
+  encoding: z.enum(['utf8', 'win1252']).optional(),
+  delimiter: z.string().optional(),
+});
+
+export const setSettingsPayloadSchema = z.object({
+  settings: appSettingsSchema,
+});
+
+export const templateKindSchema = z.enum(['invoice', 'offer']);
+
+export const templateSchema = z.object({
+  id: z.string(),
+  kind: templateKindSchema,
+  name: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  elements: z.array(
+    z.object({
+      id: z.string(),
+      type: z.string(),
+      x: z.number(),
+      y: z.number(),
+      zIndex: z.number(),
+      content: z.string().optional(),
+      src: z.string().optional(),
+      tableData: z
+        .object({
+          columns: z.array(
+            z.object({
+              id: z.string(),
+              label: z.string(),
+              width: z.number(),
+              visible: z.boolean(),
+              align: z.enum(['left', 'center', 'right']),
+            }),
+          ),
+          rows: z.array(
+            z.object({
+              id: z.string(),
+              cells: z.array(z.string()),
+            }),
+          ),
+        })
+        .optional(),
+      qrData: z
+        .object({
+          iban: z.string(),
+          bic: z.string(),
+          amount: z.number(),
+          reference: z.string(),
+        })
+        .optional(),
+      style: z.record(z.any()),
+      label: z.string().optional(),
+    }),
+  ),
+});
+
+export const listTemplatesParamsSchema = z.object({
+  kind: templateKindSchema.optional(),
+});
+
+export const upsertTemplatePayloadSchema = z.object({
+  template: templateSchema,
+});
+
+export const setActiveTemplatePayloadSchema = z.object({
+  kind: templateKindSchema,
+  templateId: z.string().nullable(),
+});
