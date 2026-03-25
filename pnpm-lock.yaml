@@ -75,15 +75,24 @@ importers:
       '@billme/desktop-data':
         specifier: workspace:*
         version: link:../../packages/desktop-data
+      '@billme/desktop-hooks':
+        specifier: workspace:*
+        version: link:../../packages/desktop-hooks
       '@billme/desktop-renderer':
         specifier: workspace:*
         version: link:../../packages/desktop-renderer
       '@billme/desktop-services':
         specifier: workspace:*
         version: link:../../packages/desktop-services
+      '@billme/desktop-state':
+        specifier: workspace:*
+        version: link:../../packages/desktop-state
       '@billme/desktop-ui':
         specifier: workspace:*
         version: link:../../packages/desktop-ui
+      '@billme/desktop-utils':
+        specifier: workspace:*
+        version: link:../../packages/desktop-utils
       '@billme/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -282,12 +291,21 @@ importers:
       '@billme/desktop-data':
         specifier: workspace:*
         version: link:../../packages/desktop-data
+      '@billme/desktop-hooks':
+        specifier: workspace:*
+        version: link:../../packages/desktop-hooks
       '@billme/desktop-services':
         specifier: workspace:*
         version: link:../../packages/desktop-services
+      '@billme/desktop-state':
+        specifier: workspace:*
+        version: link:../../packages/desktop-state
       '@billme/desktop-ui':
         specifier: workspace:*
         version: link:../../packages/desktop-ui
+      '@billme/desktop-utils':
+        specifier: workspace:*
+        version: link:../../packages/desktop-utils
       '@billme/finance-intelligence':
         specifier: workspace:*
         version: link:../../packages/finance-intelligence
@@ -466,6 +484,15 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
 
+  packages/desktop-hooks:
+    dependencies:
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
+
   packages/desktop-renderer:
     dependencies:
       '@tanstack/react-query':
@@ -493,11 +520,26 @@ importers:
         specifier: ^5.5.3
         version: 5.5.3
 
+  packages/desktop-state:
+    dependencies:
+      zustand:
+        specifier: ^5.0.10
+        version: 5.0.11(@types/react@19.2.13)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
+
   packages/desktop-ui:
     dependencies:
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.4)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
+
+  packages/desktop-utils:
+    dependencies:
       react:
         specifier: ^19.0.0
         version: 19.2.4

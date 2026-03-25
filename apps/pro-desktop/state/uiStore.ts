@@ -1,30 +1,6 @@
-import { create } from 'zustand';
-import { Invoice } from '../types';
+import type { Invoice } from '../types';
+import { createUiStore, type BaseUiState } from '@billme/desktop-state/uiStore';
 
-export interface UiState {
-  editingInvoice: Invoice | null;
-  editingDocumentType: 'invoice' | 'offer' | null;
-  editingDocumentMode: 'create' | 'edit' | null;
-  editorSidebarCollapsed: boolean;
+export type UiState = BaseUiState<Invoice>;
+export const useUiStore = createUiStore<Invoice>();
 
-  setEditingInvoice: (invoice: Invoice, type: 'invoice' | 'offer', mode?: 'create' | 'edit') => void;
-  clearEditingInvoice: () => void;
-  setEditorSidebarCollapsed: (collapsed: boolean) => void;
-}
-
-export const useUiStore = create<UiState>((set) => ({
-  editingInvoice: null,
-  editingDocumentType: null,
-  editingDocumentMode: null,
-  editorSidebarCollapsed: false,
-
-  setEditingInvoice: (invoice, type, mode = 'edit') =>
-    set({ editingInvoice: invoice, editingDocumentType: type, editingDocumentMode: mode }),
-  clearEditingInvoice: () =>
-    set({
-      editingInvoice: null,
-      editingDocumentType: null,
-      editingDocumentMode: null,
-    }),
-  setEditorSidebarCollapsed: (collapsed) => set({ editorSidebarCollapsed: collapsed }),
-}));
