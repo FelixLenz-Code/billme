@@ -19,7 +19,10 @@
     "dist": "pnpm -C apps/desktop dist",
     "deploy:demo": "pnpm -C apps/demo deploy:cf",
     "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:smoke": "playwright test",
+    "test:e2e:full": "E2E_FULL=1 playwright test",
+    "test:e2e:pro": "E2E_FULL=1 playwright test --project=pro-full"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

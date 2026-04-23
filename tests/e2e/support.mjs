@@ -8,9 +8,17 @@ import { _electron as electron } from 'playwright';
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const desktopRoot = path.join(repoRoot, 'apps', 'desktop');
-const rendererRoot = path.join(desktopRoot, 'dist', 'renderer');
 const electronBinary = path.join(path.dirname(require.resolve('electron')), 'dist', 'electron');
+const APP_PATHS = {
+  desktop: {
+    cwd: path.join(repoRoot, 'apps', 'desktop'),
+    rendererRoot: path.join(repoRoot, 'apps', 'desktop', 'dist', 'renderer'),
+  },
+  pro: {
+    cwd: path.join(repoRoot, 'apps', 'pro-desktop'),
+    rendererRoot: path.join(repoRoot, 'apps', 'pro-desktop', 'dist', 'renderer'),
+  },
+};
 
 export const currentYear = new Date().getFullYear();
 const todayIso = new Date().toISOString().slice(0, 10);
@@ -263,6 +271,7 @@ const BASE_ACCOUNT = {
   name: 'Hauptgeschaeftskonto',
   iban: 'DE12345678901234567890',
   balance: 124500,
+  defaultSkrAccountNumber: '1200',
   type: 'bank',
   color: 'bg-white',
   transactions: [
@@ -397,33 +406,45 @@ const startStaticServer = async (rootDir) => {
   };
 };
 
-export async function launchDesktopApp() {
-  const rendererServer = await startStaticServer(rendererRoot);
-  const userDataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'billme-e2e-'));
+const appConfig = (app) => {
+  if (app === 'desktop' || app === 'pro') return APP_PATHS[app];
+  throw new Error(`Unsupported e2e app target: ${String(app)}`);
+};
 
-  const app = await electron.launch({
+export async function launchDesktopApp(options = {}) {
+  const app = options.app ?? 'desktop';
+  const { cwd, rendererRoot } = appConfig(app);
+  const rendererServer = await startStaticServer(rendererRoot);
+  const userDataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `billme-${app}-e2e-`));
+  const cacheDir = path.join(userDataDir, 'cache');
+  await fs.promises.mkdir(cacheDir, { recursive: true });
+
+  const launchedApp = await electron.launch({
     executablePath: electronBinary,
-    cwd: desktopRoot,
+    cwd,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu-sandbox', `--user-data-dir=${userDataDir}`, '.'],
     env: {
       ...process.env,
       ELECTRON_DISABLE_SANDBOX: '1',
       BILLME_E2E: '1',
+      BILLME_E2E_USER_DATA_DIR: userDataDir,
+      BILLME_E2E_CACHE_DIR: cacheDir,
       VITE_DEV_SERVER_URL: rendererServer.baseUrl,
     },
   });
 
-  const page = await app.firstWindow();
+  const page = await launchedApp.firstWindow();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForFunction(() => Boolean(window.billmeApi));
 
   return {
-    app,
+    app: launchedApp,
     page,
     baseUrl: rendererServer.baseUrl,
     userDataDir,
+    targetApp: app,
     close: async () => {
-      await app.close();
+      await launchedApp.close();
       await rendererServer.close();
       await fs.promises.rm(userDataDir, { recursive: true, force: true });
     },
@@ -459,6 +480,7 @@ export async function setDesktopSettings(page, settings) {
 }
 
 export async function seedDesktopData(page, options = {}) {
+  const app = options.app ?? 'desktop';
   const settings = createDesktopSettings(options.settingsOverrides ?? {});
   await setDesktopSettings(page, settings);
 
@@ -487,4 +509,11 @@ export async function seedDesktopData(page, options = {}) {
   await invokeDesktopIpc(page, 'recurring:upsert', {
     profile: BASE_RECURRING,
   });
+
+  if (app === 'pro') {
+    const statsBefore = await invokeDesktopIpc(page, 'pro:getLedgerStats');
+    if ((statsBefore?.total ?? 0) === 0) {
+      await invokeDesktopIpc(page, 'pro:importSkr', { preferredSource: 'auto' });
+    }
+  }
 }

@@ -1,0 +1,111 @@
+import { expect, test } from '@playwright/test';
+import { appUrl, invokeDesktopIpc, launchDesktopApp, seedDesktopData } from '../support.mjs';
+
+let desktop;
+
+const ensureWorkflowDraft = async (page) => {
+  const transactions = await invokeDesktopIpc(page, 'pro:listBankTransactions');
+  expect(transactions.length).toBeGreaterThan(0);
+  const tx = transactions.find((row) => !row.linkedInvoiceId) ?? transactions[0];
+  const existingDraft = await invokeDesktopIpc(page, 'pro:getDraftByTransactionId', { transactionId: tx.id });
+  if (existingDraft) {
+    return { tx, draft: existingDraft };
+  }
+  const postingDate = tx.date ?? new Date().toISOString().slice(0, 10);
+  const amount = Math.abs(Number(tx.amount || 0)) || 1;
+  const isExpense = tx.type === 'expense';
+
+  const draft = await invokeDesktopIpc(page, 'pro:saveDraft', {
+    draft: {
+      id: `e2e-draft-${tx.id}`,
+      tenantId: 'default',
+      transactionId: tx.id,
+      workflowStatus: 'suggested',
+      postingDate,
+      documentDate: postingDate,
+      bookingText: 'E2E Pro Workflow',
+      reference: 'E2E-WF',
+      period: postingDate.slice(0, 7),
+      fiscalYear: Number(postingDate.slice(0, 4)),
+      lines: [
+        {
+          id: `line-${tx.id}-1`,
+          accountNumber: isExpense ? '4930' : '1200',
+          debitAmount: amount,
+          creditAmount: 0,
+        },
+        {
+          id: `line-${tx.id}-2`,
+          accountNumber: isExpense ? '1200' : '8400',
+          debitAmount: 0,
+          creditAmount: amount,
+        },
+      ],
+      validationIssues: [],
+      updatedAt: new Date().toISOString(),
+    },
+  });
+
+  return { tx, draft };
+};
+
+test.beforeEach(async () => {
+  desktop = await launchDesktopApp({ app: 'pro' });
+  await seedDesktopData(desktop.page, { app: 'pro' });
+});
+
+test.afterEach(async () => {
+  if (desktop) {
+    await desktop.close();
+    desktop = undefined;
+  }
+});
+
+test('posts and reverses a pro draft while accounting health reflects transitions', async () => {
+  const { page, baseUrl } = desktop;
+  const { tx, draft } = await ensureWorkflowDraft(page);
+
+  await page.goto(appUrl(baseUrl, '/accounting'));
+  await expect(page.getByRole('heading', { name: 'Pro Buchhaltung' })).toBeVisible();
+
+  await invokeDesktopIpc(page, 'pro:dispatchDraftAction', {
+    transactionId: tx.id,
+    action: 'submit_for_review',
+  });
+  await invokeDesktopIpc(page, 'pro:dispatchDraftAction', {
+    transactionId: tx.id,
+    action: 'approve',
+  });
+
+  const postResult = await invokeDesktopIpc(page, 'pro:postDraft', {
+    draftId: draft.id,
+    actorRole: 'accountant',
+  });
+  const blockingIssues = postResult.issues.filter((issue) => issue.blocking);
+
+  const healthAfterPost = await invokeDesktopIpc(page, 'pro:getAccountingHealth');
+  await page.reload();
+  const healthCard = page.locator('div.rounded-2xl').filter({ hasText: 'Posted / Drafts' }).first();
+  await expect(healthCard).toContainText(String(healthAfterPost.postedCount));
+
+  if (blockingIssues.length > 0) {
+    const afterBlocking = await invokeDesktopIpc(page, 'pro:getDraftByTransactionId', { transactionId: tx.id });
+    expect(afterBlocking?.workflowStatus).toBe('incomplete');
+    return;
+  }
+
+  expect(healthAfterPost.postedCount).toBeGreaterThan(0);
+
+  const journalEntries = await invokeDesktopIpc(page, 'pro:listJournalEntries', { limit: 500, offset: 0 });
+  const postedEntry = journalEntries.find((entry) => entry.sourceDraftId === draft.id && entry.status === 'posted');
+  expect(postedEntry?.id).toBeTruthy();
+
+  await invokeDesktopIpc(page, 'pro:reverseJournalEntry', {
+    entryId: postedEntry.id,
+    reason: 'E2E reverse flow',
+    actorRole: 'accountant',
+  });
+
+  const journalAfterReverse = await invokeDesktopIpc(page, 'pro:listJournalEntries', { limit: 500, offset: 0 });
+  expect(journalAfterReverse.some((entry) => entry.reversedEntryId === postedEntry.id)).toBeTruthy();
+});

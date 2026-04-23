@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { appUrl, launchDesktopApp, seedDesktopData } from './support.mjs';
+import { appUrl, launchDesktopApp, seedDesktopData } from '../support.mjs';
 
 let desktop;
 

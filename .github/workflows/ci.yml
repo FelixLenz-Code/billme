@@ -68,3 +68,6 @@ jobs:
 
       - name: Offer portal build
         run: pnpm -C apps/offer-portal build
+
+      - name: E2E smoke (desktop + pro)
+        run: pnpm test:e2e:smoke

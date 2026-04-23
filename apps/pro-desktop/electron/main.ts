@@ -159,7 +159,11 @@ process.on('uncaughtException', (error: Error) => {
 });
 
 app.whenReady().then(async () => {
-  if (isDev) {
+  const e2eUserDataDir = process.env.BILLME_E2E_USER_DATA_DIR;
+  if (e2eUserDataDir) {
+    app.setPath('userData', e2eUserDataDir);
+    app.setPath('cache', process.env.BILLME_E2E_CACHE_DIR ?? path.join(e2eUserDataDir, 'cache'));
+  } else if (isDev) {
     // In some dev environments, the default userData/cache paths may be unwritable.
     const devBase = path.join(app.getPath('temp'), `${PRODUCT_PROFILE.backupPrefix}-dev`);
     app.setPath('userData', devBase);

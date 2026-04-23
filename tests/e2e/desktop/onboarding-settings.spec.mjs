@@ -5,7 +5,7 @@ import {
   launchDesktopApp,
   seedDesktopData,
   setDesktopSettings,
-} from './support.mjs';
+} from '../support.mjs';
 
 let desktop;
 

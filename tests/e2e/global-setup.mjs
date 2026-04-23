@@ -5,4 +5,8 @@ export default async function globalSetup() {
     cwd: process.cwd(),
     stdio: 'inherit',
   });
+  execFileSync('pnpm', ['-C', 'apps/pro-desktop', 'build'], {
+    cwd: process.cwd(),
+    stdio: 'inherit',
+  });
 }
