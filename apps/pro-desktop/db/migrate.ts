@@ -703,6 +703,10 @@ export const runMigrations = (db: Database.Database): void => {
     nextCustomerNumber += 1;
   }
 
+  while (usedCustomerNumbers.has(formatCustomerNumber(nextCustomerNumber))) {
+    nextCustomerNumber += 1;
+  }
+
   settingsJson.numbers.customerPrefix = customerPrefixTemplate;
   settingsJson.numbers.customerNumberLength = customerNumberLength;
   settingsJson.numbers.nextCustomerNumber = nextCustomerNumber;

@@ -158,10 +158,22 @@ const formatDocumentNumber = (
   return `${prefix}${String(counterValue).padStart(padLength, '0')}`;
 };
 
+const isCustomerNumberTaken = (number: string): boolean => {
+  if (clients.some((client) => client.customerNumber === number)) {
+    return true;
+  }
+  return [...numberReservations.values()].some(
+    (reservation) =>
+      reservation.kind === 'customer'
+      && reservation.number === number
+      && reservation.status !== 'released',
+  );
+};
+
 const reserveNumber = (
   kind: 'invoice' | 'offer' | 'customer',
 ): { reservationId: string; number: string } => {
-  const counterValue = Math.max(
+  let counterValue = Math.max(
     1,
     kind === 'invoice'
       ? settings.numbers.nextInvoiceNumber
@@ -169,7 +181,13 @@ const reserveNumber = (
         ? settings.numbers.nextOfferNumber
         : settings.numbers.nextCustomerNumber,
   );
-  const number = formatDocumentNumber(kind, counterValue);
+  let number = formatDocumentNumber(kind, counterValue);
+  if (kind === 'customer') {
+    while (isCustomerNumberTaken(number)) {
+      counterValue += 1;
+      number = formatDocumentNumber(kind, counterValue);
+    }
+  }
   if (kind === 'invoice') {
     settings.numbers.nextInvoiceNumber = counterValue + 1;
   } else if (kind === 'offer') {

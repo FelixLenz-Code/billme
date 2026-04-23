@@ -109,4 +109,44 @@ describe('mockEngine route coverage', () => {
     const pdf = await invoke('pdf:export', { kind: 'invoice', id: invoices[0]!.id });
     expect(pdf.path.startsWith('mock://pdf/')).toBe(true);
   });
+
+  it('skips duplicate customer numbers when auto-assigning a blank Kundennummer', async () => {
+    const invoke = createMockInvoke();
+    const settings = await invoke('settings:get', undefined);
+    expect(settings).not.toBeNull();
+    if (!settings) {
+      throw new Error('Expected mock settings');
+    }
+
+    await invoke('settings:set', {
+      settings: {
+        ...settings,
+        numbers: {
+          ...settings.numbers,
+          nextCustomerNumber: 1,
+        },
+      },
+    });
+
+    const saved = await invoke('clients:upsert', {
+      client: {
+        id: 'client-stale-counter',
+        customerNumber: undefined,
+        company: 'Neue Kundin GmbH',
+        contactPerson: '',
+        email: '',
+        phone: '',
+        address: '',
+        status: 'active',
+        tags: [],
+        notes: '',
+        projects: [],
+        activities: [],
+        addresses: [],
+        emails: [],
+      },
+    });
+
+    expect(saved.customerNumber).toBe('KD-0004');
+  });
 });

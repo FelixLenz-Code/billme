@@ -69,6 +69,43 @@ export function formatDocumentNumber(
   return `${prefix}${String(safeCounterValue).padStart(length, '0')}`;
 }
 
+function isCustomerNumberTaken(db: Database.Database, number: string): boolean {
+  const existingClient = db
+    .prepare('SELECT 1 FROM clients WHERE customer_number = ? LIMIT 1')
+    .get(number) as { 1: number } | undefined;
+  if (existingClient) return true;
+
+  const existingReservation = db
+    .prepare(
+      `
+        SELECT 1
+        FROM number_reservations
+        WHERE kind = 'customer'
+          AND number = ?
+          AND status <> 'released'
+        LIMIT 1
+      `,
+    )
+    .get(number) as { 1: number } | undefined;
+  return Boolean(existingReservation);
+}
+
+function findNextAvailableCounter(
+  db: Database.Database,
+  settings: AppSettings,
+  kind: NumberKind,
+): number {
+  let counterValue = toSafeCounter(getCurrentCounter(settings, kind));
+  if (kind !== 'customer') return counterValue;
+
+  let candidate = formatDocumentNumber(settings, kind, counterValue);
+  while (isCustomerNumberTaken(db, candidate)) {
+    counterValue += 1;
+    candidate = formatDocumentNumber(settings, kind, counterValue);
+  }
+  return counterValue;
+}
+
 export const reserveNumber = (
   db: Database.Database,
   kind: NumberKind,
@@ -80,7 +117,7 @@ export const reserveNumber = (
     }
 
     const now = new Date().toISOString();
-    const current = toSafeCounter(getCurrentCounter(settings, kind));
+    const current = findNextAvailableCounter(db, settings, kind);
     const number = formatDocumentNumber(settings, kind, current);
     setCurrentCounter(settings, kind, current + 1);
     setSettings(db, settings);
