@@ -44,3 +44,5 @@ apps/demo/.wrangler/
 doppelteBuchhaltung/*
 !doppelteBuchhaltung/skr-kontenrahmen.sqlite
 CLAUDE.md
+docs/compliance-germany-double-entry-gap-checklist.md
+pr-billme.md
