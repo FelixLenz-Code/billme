@@ -213,39 +213,39 @@ export default function BookingEditor({ transactionId, role, onBack, onStoreChan
         {announceMessage}
       </div>
 
-      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0 gap-4">
-        <div className="flex items-center gap-4 min-w-0">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 shrink-0 gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onBack}
-            className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 shrink-0"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={15} />
           </button>
-          <div className="w-11 h-11 bg-black rounded-full flex items-center justify-center text-[#ccff00] shrink-0">
-            <FileText size={20} />
+          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-[#ccff00] shrink-0">
+            <FileText size={15} />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-xl font-black text-gray-900 truncate">Buchung erfassen</h2>
-              <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusPresentation.className}`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm font-black text-gray-900 truncate">Buchung erfassen</h2>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusPresentation.className}`}>
                 {statusPresentation.label}
               </span>
               {blocking ? (
-                <span className="px-2 py-1 rounded-md bg-red-50 text-red-700 text-xs font-bold inline-flex items-center gap-1">
-                  <ShieldAlert size={12} /> Posting blockiert
+                <span className="px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 text-[10px] font-bold inline-flex items-center gap-0.5">
+                  <ShieldAlert size={10} /> Blockiert
                 </span>
               ) : (
-                <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-bold inline-flex items-center gap-1">
-                  <Check size={12} /> Keine Blocker
+                <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold inline-flex items-center gap-0.5">
+                  <Check size={10} /> OK
                 </span>
               )}
               {readOnly && (
-                <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-700 text-xs font-bold inline-flex items-center gap-1">
-                  <Lock size={12} /> Read-only
+                <span className="px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-bold inline-flex items-center gap-0.5">
+                  <Lock size={10} /> Read-only
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-500 font-medium mt-1">
+            <p className="text-xs text-gray-400 font-medium mt-0.5">
               {transaction.payee} • {new Date(transaction.date).toLocaleDateString('de-DE')} •{' '}
               {formatCurrency(transaction.amount, transaction.currency)}
             </p>

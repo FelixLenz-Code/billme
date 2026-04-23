@@ -163,20 +163,20 @@ export default function ReconciliationWorkbench({
   return (
     <div className="flex">
       <div className="w-[28rem] shrink-0 border-r border-gray-100 flex flex-col">
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-black text-[#ccff00] flex items-center justify-center">
-              <ArrowRightLeft size={20} />
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-black text-[#ccff00] flex items-center justify-center shrink-0">
+              <ArrowRightLeft size={15} />
             </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-gray-900">Bankabgleich Workbench</h1>
-              <p className="text-sm text-gray-500 font-medium">
+            <div className="min-w-0">
+              <h1 className="text-sm font-black tracking-tight text-gray-900 leading-tight">Bankabgleich Workbench</h1>
+              <p className="text-xs text-gray-400 font-medium leading-tight">
                 Vorschläge prüfen, matchen und in den Buchungsworkflow überführen.
               </p>
             </div>
           </div>
         </div>
-        <div className="overflow-y-auto max-h-[56vh] p-3 space-y-2">
+        <div className="overflow-y-auto p-3 space-y-2">
           {queue.map((tx) => {
             const status = getStatusPresentation(tx.workflowStatus);
             return (

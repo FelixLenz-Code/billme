@@ -150,33 +150,33 @@ export default function ReportsView({ onOpenTransaction, onOpenReceipt }: Report
   };
 
   return (
-    <div className="flex flex-col bg-gray-50">
-      <div className="px-6 py-5 border-b border-gray-200 bg-white">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
-              <span className="w-6 h-6 rounded-full bg-[#ccff00] text-black flex items-center justify-center">
-                <FileBarChart2 size={14} />
-              </span>
-              Auswertungen
-            </div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-gray-900">SuSa, GuV und Bilanz-Preview</h1>
-            <p className="mt-1 text-sm text-gray-500">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="px-6 py-3 border-b border-gray-100 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
+            <span className="w-6 h-6 rounded-md bg-[#ccff00] text-black flex items-center justify-center">
+              <FileBarChart2 size={13} />
+            </span>
+            Auswertungen
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm font-black tracking-tight text-gray-900">SuSa, GuV und Bilanz-Preview</h1>
+            <p className="text-xs text-gray-400">
               Prototypische Reporting-UI mit Drilldown-Struktur, vorbereitet für spätere SQLite-/Ledger-Anbindung.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="px-4 h-10 rounded-full border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2 transition-colors">
-              <Download size={14} /> Export (Mock)
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="px-3 h-8 rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5 transition-colors">
+              <Download size={13} /> Export (Mock)
             </button>
-            <button className="px-4 h-10 rounded-full border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2 transition-colors">
-              <RefreshCw size={14} /> Snapshot (Mock)
+            <button className="px-3 h-8 rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5 transition-colors">
+              <RefreshCw size={13} /> Snapshot (Mock)
             </button>
           </div>
         </div>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         <ReportToolbar filters={filters} onChange={setFilters} />
         <div className="flex items-center justify-between gap-3">
           <ReportTabSwitch activeTab={activeTab} onChange={setActiveTab} />
@@ -184,7 +184,7 @@ export default function ReportsView({ onOpenTransaction, onOpenReceipt }: Report
         </div>
 
         <div className="flex flex-col xl:flex-row gap-4">
-            <div className="flex-1 min-w-0 overflow-y-auto max-h-[56vh] pr-1">
+            <div className="flex-1 min-w-0 pr-1">
               {reportsLoading ? (
                 <div className="rounded-2xl border border-gray-200 bg-white p-8 text-sm text-gray-500">
                   Lade Auswertungen…

@@ -191,22 +191,6 @@ export const ProAccountingPage: React.FC = () => {
       return rows.filter((row) => row !== null);
     },
   });
-  const susaQuery = useQuery({
-    queryKey: ['pro-reports', 'susa'],
-    queryFn: () => ipc.pro.getSusaReport({}),
-  });
-  const guvQuery = useQuery({
-    queryKey: ['pro-reports', 'guv'],
-    queryFn: () => ipc.pro.getGuvReport({}),
-  });
-  const bilanzQuery = useQuery({
-    queryKey: ['pro-reports', 'bilanz'],
-    queryFn: () => ipc.pro.getBilanzReport({}),
-  });
-  const healthQuery = useQuery({
-    queryKey: ['pro-reports', 'health'],
-    queryFn: () => ipc.pro.getAccountingHealth(),
-  });
   const importSkr = useImportSkrMutation();
   const [showRulesModal, setShowRulesModal] = React.useState(false);
 
@@ -442,11 +426,11 @@ export const ProAccountingPage: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-[2.5rem] p-8 h-full flex flex-col shadow-sm">
-      <div className="mb-4 flex items-center justify-between shrink-0">
+    <div className="bg-white rounded-[2.5rem] px-6 pt-5 pb-0 h-full flex flex-col shadow-sm">
+      <div className="mb-3 flex items-center justify-between shrink-0">
         <div>
-          <h2 className="text-2xl font-black text-gray-900">Pro Buchhaltung</h2>
-          <p className="text-sm text-gray-500 mt-1">Doppelte Buchführung, Kontenrahmen und Berichte.</p>
+          <h2 className="text-xl font-black text-gray-900 leading-tight">Pro Buchhaltung</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Doppelte Buchführung, Kontenrahmen und Berichte.</p>
         </div>
         <Button size="sm" variant="secondary" onClick={() => setShowRulesModal(true)}>
           <Settings2 size={14} />
@@ -454,34 +438,9 @@ export const ProAccountingPage: React.FC = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 shrink-0">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="text-xs text-gray-500">SuSa Saldo</div>
-          <div className="text-xl font-black text-gray-900">
-            {(susaQuery.data?.totals.balance ?? 0).toFixed(2)} EUR
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="text-xs text-gray-500">GuV Ergebnis</div>
-          <div className="text-xl font-black text-gray-900">
-            {(guvQuery.data?.netResult ?? 0).toFixed(2)} EUR
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="text-xs text-gray-500">Bilanz Delta</div>
-          <div className="text-xl font-black text-gray-900">
-            {(bilanzQuery.data?.totals.delta ?? 0).toFixed(2)} EUR
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="text-xs text-gray-500">Posted / Drafts</div>
-          <div className="text-xl font-black text-gray-900">
-            {healthQuery.data?.postedCount ?? 0} / {healthQuery.data?.draftCount ?? 0}
-          </div>
-        </div>
-      </div>
 
-      <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 overflow-hidden">
+
+      <div className="flex-1 min-h-0 rounded-t-2xl border border-b-0 border-gray-200 overflow-hidden">
         <ProAccountingWorkspace
           seed={seed}
           dataAdapter={dataAdapter}

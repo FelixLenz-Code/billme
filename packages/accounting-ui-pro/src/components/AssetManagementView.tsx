@@ -163,56 +163,52 @@ export default function AssetManagementView() {
   }, []);
 
   return (
-    <div className="flex">
-      <div className="w-[34rem] shrink-0 border-r border-gray-100 flex flex-col">
-        <div className="p-6 border-b border-gray-100 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-black text-[#ccff00] flex items-center justify-center">
-                <Building2 size={22} />
-              </div>
-              <div>
-                <h1 className="text-2xl font-black tracking-tight text-gray-900">Anlagenverwaltung</h1>
-                <p className="text-sm text-gray-500 font-medium">
-                  Übersicht, Aktivierung, Abschreibung und Bewegungen Ihrer Anlagen.
-                </p>
-              </div>
+    <div className="flex h-full min-w-0 flex-col overflow-hidden xl:flex-row">
+      <div className="flex min-h-0 flex-col border-b border-gray-100 xl:basis-[34rem] xl:min-w-[24rem] xl:max-w-[34rem] xl:border-b-0 xl:border-r">
+        <div className="px-4 py-3 border-b border-gray-100 space-y-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-black text-[#ccff00] flex items-center justify-center shrink-0">
+              <Building2 size={15} />
             </div>
-            <button className="px-4 py-2 rounded-full bg-black text-white text-sm font-bold hover:bg-gray-900 inline-flex items-center gap-1">
-              <Plus size={14} />
+            <div className="flex-1 min-w-0">
+              <h1 className="text-sm font-black tracking-tight text-gray-900 leading-tight">Anlagenverwaltung</h1>
+              <p className="text-xs text-gray-400 font-medium leading-tight">
+                Übersicht, Aktivierung und Abschreibung.
+              </p>
+            </div>
+            <button className="h-8 px-3 rounded-full bg-black text-white text-xs font-bold hover:bg-gray-900 inline-flex items-center gap-1 shrink-0">
+              <Plus size={12} />
               Anlage erfassen
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-gray-200 bg-white p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
               <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">Anlagen gesamt</div>
-              <div className="text-lg font-bold text-gray-900 mt-1">{totals.totalAssets}</div>
-              <div className="text-xs text-gray-500">{totals.activeAssets} aktiv</div>
+              <div className="text-sm font-bold text-gray-900 mt-0.5">{totals.totalAssets} <span className="text-xs font-medium text-gray-500">({totals.activeAssets} aktiv)</span></div>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-3">
+            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
               <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">Restbuchwert</div>
-              <div className="text-lg font-bold text-gray-900 mt-1">{euro(totals.totalResidual)}</div>
-              <div className="text-xs text-gray-500">AK gesamt {euro(totals.totalAcquisition)}</div>
+              <div className="text-sm font-bold text-gray-900 mt-0.5">{euro(totals.totalResidual)} <span className="text-xs font-medium text-gray-500">AK {euro(totals.totalAcquisition)}</span></div>
             </div>
           </div>
 
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Anlage suchen (Nr., Name, Klasse, KSt.)"
-                className="w-full h-10 rounded-xl border border-gray-200 pl-9 pr-3 text-sm"
+                className="w-full h-8 rounded-lg border border-gray-200 pl-8 pr-3 text-xs"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as 'alle' | AssetStatus)}
-                className="h-10 rounded-xl border border-gray-200 px-3 text-sm font-medium"
+                className="h-8 rounded-lg border border-gray-200 px-2 text-xs font-medium"
               >
                 <option value="alle">Alle Status</option>
                 <option value="entwurf">Entwurf</option>
@@ -221,14 +217,14 @@ export default function AssetManagementView() {
                 <option value="verkauft">Verkauft</option>
                 <option value="stillgelegt">Stillgelegt</option>
               </select>
-              <button className="h-10 px-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
-                <Filter size={16} />
+              <button className="h-8 px-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                <Filter size={13} />
               </button>
             </div>
           </div>
         </div>
 
-        <div className="overflow-y-auto max-h-[56vh] p-4 space-y-2">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-2">
           {filtered.map((asset) => {
             const pill = statusPill(asset.status);
             const selectedCard = selected?.id === asset.id;
@@ -277,72 +273,72 @@ export default function AssetManagementView() {
         </div>
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex min-h-0 flex-1 min-w-0 flex-col">
         {!selected ? (
-          <div className="flex items-center justify-center p-12 text-gray-500">Keine Anlage ausgewählt.</div>
+          <div className="flex min-h-0 flex-1 items-center justify-center p-12 text-gray-500">Keine Anlage ausgewählt.</div>
         ) : (
           <>
-            <div className="p-6 border-b border-gray-100 space-y-4">
-              <div className="flex items-start justify-between gap-4">
+            <div className="px-4 py-3 border-b border-gray-100 space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-bold text-gray-400">{selected.assetNumber}</span>
-                    <span className={`px-2 py-1 rounded-full text-[11px] font-bold ${statusPill(selected.status).className}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusPill(selected.status).className}`}>
                       {statusPill(selected.status).label}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-[11px] font-bold ${selected.receiptLinked ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${selected.receiptLinked ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {selected.receiptLinked ? 'Beleg verknüpft' : 'Beleg fehlt'}
                     </span>
                   </div>
-                  <h2 className="text-2xl font-black text-gray-900 tracking-tight mt-1">{selected.name}</h2>
-                  <p className="text-sm text-gray-500 font-medium">
+                  <h2 className="text-base font-black text-gray-900 tracking-tight mt-0.5">{selected.name}</h2>
+                  <p className="text-xs text-gray-400 font-medium">
                     {selected.assetClass} • {selected.costCenter} • {selected.location}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2 justify-end">
-                  <button className="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">
-                    <ArrowRightLeft size={14} />
-                    Bewegung erfassen
+                <div className="flex flex-wrap gap-1.5 justify-end shrink-0">
+                  <button className="h-8 px-3 rounded-full border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">
+                    <ArrowRightLeft size={12} />
+                    Bewegung
                   </button>
-                  <button className="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">
-                    <CalendarClock size={14} />
+                  <button className="h-8 px-3 rounded-full border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">
+                    <CalendarClock size={12} />
                     AfA-Vorschau
                   </button>
-                  <button className="px-4 py-2 rounded-full bg-black text-white text-sm font-bold hover:bg-gray-900 inline-flex items-center gap-1">
-                    <Sparkles size={14} />
-                    Aktivieren / Bearbeiten
+                  <button className="h-8 px-3 rounded-full bg-black text-white text-xs font-bold hover:bg-gray-900 inline-flex items-center gap-1">
+                    <Sparkles size={12} />
+                    Bearbeiten
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                <div className="rounded-xl border border-gray-200 p-3 bg-white">
-                  <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">Anschaffungskosten</div>
-                  <div className="text-lg font-bold text-gray-900 mt-1">{euro(selected.acquisitionCost)}</div>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+                <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+                  <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">AK</div>
+                  <div className="text-sm font-bold text-gray-900 mt-0.5">{euro(selected.acquisitionCost)}</div>
                 </div>
-                <div className="rounded-xl border border-gray-200 p-3 bg-white">
-                  <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">Restbuchwert</div>
-                  <div className="text-lg font-bold text-gray-900 mt-1">{euro(selected.residualValue)}</div>
+                <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+                  <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">RBW</div>
+                  <div className="text-sm font-bold text-gray-900 mt-0.5">{euro(selected.residualValue)}</div>
                 </div>
-                <div className="rounded-xl border border-gray-200 p-3 bg-white">
+                <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
                   <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">AfA p.a.</div>
-                  <div className="text-lg font-bold text-gray-900 mt-1">{euro(selected.annualDepreciation)}</div>
+                  <div className="text-sm font-bold text-gray-900 mt-0.5">{euro(selected.annualDepreciation)}</div>
                 </div>
-                <div className="rounded-xl border border-gray-200 p-3 bg-white">
+                <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
                   <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">Nächste AfA</div>
-                  <div className="text-lg font-bold text-gray-900 mt-1">{selected.nextDepreciation}</div>
+                  <div className="text-sm font-bold text-gray-900 mt-0.5">{selected.nextDepreciation}</div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {tabs.map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 rounded-full text-sm font-bold border ${
+                    className={`h-7 px-3 rounded-full text-xs font-bold border ${
                       activeTab === tab
                         ? 'bg-black text-white border-black'
-                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
                     {tab}
@@ -351,8 +347,8 @@ export default function AssetManagementView() {
               </div>
             </div>
 
-            <div className="overflow-y-auto max-h-[56vh] p-6 grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-6">
-              <section className="space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-6 grid grid-cols-1 gap-6 min-[1700px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <section className="min-w-0 space-y-4">
                 <div className="rounded-2xl border border-gray-200 bg-white p-5">
                   <div className="text-sm font-bold text-gray-900 mb-3">{activeTab}</div>
 
@@ -417,7 +413,7 @@ export default function AssetManagementView() {
                 </div>
               </section>
 
-              <section className="space-y-4">
+              <section className="min-w-0 space-y-4">
                 <div className="rounded-2xl border border-gray-200 bg-white p-5">
                   <div className="text-sm font-bold text-gray-900 mb-3">Anlage erfassen (Wizard-Vorschau)</div>
                   <div className="space-y-2">
@@ -466,4 +462,3 @@ export default function AssetManagementView() {
     </div>
   );
 }
-

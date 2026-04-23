@@ -11,68 +11,68 @@ export default function ReportToolbar({ filters, onChange }: ReportToolbarProps)
     onChange({ ...filters, [key]: value });
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
-        <label className="text-xs font-bold text-gray-500">
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 space-y-2">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
           Chart
           <select
             value={filters.chart}
             onChange={(e) => set('chart', e.target.value as 'SKR03' | 'SKR04')}
-            className="mt-1 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm text-gray-800"
+            className="mt-0.5 h-8 w-full rounded-lg border border-gray-200 px-2 text-sm text-gray-800"
           >
             <option value="SKR03">SKR03</option>
             <option value="SKR04">SKR04</option>
           </select>
         </label>
 
-        <label className="text-xs font-bold text-gray-500">
+        <label className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
           Mandant
           <select
             value={filters.mandantId}
             onChange={(e) => set('mandantId', e.target.value)}
-            className="mt-1 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm text-gray-800"
+            className="mt-0.5 h-8 w-full rounded-lg border border-gray-200 px-2 text-sm text-gray-800"
           >
             <option value="demo-gmbh">Demo GmbH</option>
             <option value="holding-gmbh">Holding GmbH</option>
           </select>
         </label>
 
-        <label className="text-xs font-bold text-gray-500">
+        <label className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
           Stichtag
           <input
             type="date"
             value={filters.asOfDate}
             onChange={(e) => set('asOfDate', e.target.value)}
-            className="mt-1 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm"
+            className="mt-0.5 h-8 w-full rounded-lg border border-gray-200 px-2 text-sm"
           />
         </label>
 
-        <label className="text-xs font-bold text-gray-500">
+        <label className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
           Periode von
           <input
             type="month"
             value={filters.periodFrom}
             onChange={(e) => set('periodFrom', e.target.value)}
-            className="mt-1 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm"
+            className="mt-0.5 h-8 w-full rounded-lg border border-gray-200 px-2 text-sm"
           />
         </label>
 
-        <label className="text-xs font-bold text-gray-500">
+        <label className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
           Periode bis
           <input
             type="month"
             value={filters.periodTo}
             onChange={(e) => set('periodTo', e.target.value)}
-            className="mt-1 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm"
+            className="mt-0.5 h-8 w-full rounded-lg border border-gray-200 px-2 text-sm"
           />
         </label>
 
-        <label className="text-xs font-bold text-gray-500">
+        <label className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
           Vergleich
           <select
             value={filters.compareMode}
             onChange={(e) => set('compareMode', e.target.value as ReportFilterState['compareMode'])}
-            className="mt-1 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm text-gray-800"
+            className="mt-0.5 h-8 w-full rounded-lg border border-gray-200 px-2 text-sm text-gray-800"
           >
             <option value="none">Kein Vergleich</option>
             <option value="prev_period">Vorperiode</option>
@@ -81,8 +81,8 @@ export default function ReportToolbar({ filters, onChange }: ReportToolbarProps)
         </label>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600">
           <input
             type="checkbox"
             checked={filters.includeDrafts}
@@ -91,9 +91,9 @@ export default function ReportToolbar({ filters, onChange }: ReportToolbarProps)
           />
           Entwürfe einbeziehen (Preview)
         </label>
-        <div className="flex gap-2">
-          <button className="h-10 px-3 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1 transition-colors">
-            <Filter size={14} />
+        <div className="flex gap-1.5">
+          <button className="h-7 px-2.5 rounded-full border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1 transition-colors">
+            <Filter size={12} />
             Filter speichern (Mock)
           </button>
           <button
@@ -108,9 +108,9 @@ export default function ReportToolbar({ filters, onChange }: ReportToolbarProps)
                 includeDrafts: false,
               })
             }
-            className="h-10 px-3 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1 transition-colors"
+            className="h-7 px-2.5 rounded-full border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1 transition-colors"
           >
-            <RotateCcw size={14} />
+            <RotateCcw size={12} />
             Reset
           </button>
         </div>

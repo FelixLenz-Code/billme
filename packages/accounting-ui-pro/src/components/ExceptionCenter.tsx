@@ -79,23 +79,23 @@ export default function ExceptionCenter({ role, transactions, onOpenTransaction,
   return (
     <div className="flex h-full">
       <div className="w-[26rem] shrink-0 border-r border-gray-100 flex flex-col">
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-black text-[#ccff00] flex items-center justify-center">
-              <AlertTriangle size={20} />
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-black text-[#ccff00] flex items-center justify-center shrink-0">
+              <AlertTriangle size={15} />
             </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-gray-900">Exception Center</h1>
-              <p className="text-sm text-gray-500 font-medium">Fehler, Warnungen und blockierte Buchungen zentral bearbeiten.</p>
+            <div className="min-w-0">
+              <h1 className="text-sm font-black tracking-tight text-gray-900 leading-tight">Exception Center</h1>
+              <p className="text-xs text-gray-400 font-medium leading-tight">Fehler, Warnungen und blockierte Buchungen.</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mt-4">
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
             {(Object.keys(filterLabels) as ExceptionFilter[]).map((key) => (
               <button
                 key={key}
                 onClick={() => setFilter(key)}
-                className={`px-3 py-1.5 rounded-full text-sm font-bold border ${
-                  filter === key ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-200'
+                className={`h-7 px-2.5 rounded-full text-xs font-bold border ${
+                  filter === key ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-200'
                 }`}
               >
                 {filterLabels[key]}

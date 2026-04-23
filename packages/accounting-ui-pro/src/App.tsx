@@ -87,50 +87,31 @@ export default function App({ seed, dataAdapter, onPersistEntry }: ProAccounting
 
   return (
     <div className="flex flex-col h-full w-full text-gray-900">
-      <div className="flex items-center gap-2 px-6 pt-4 pb-2 shrink-0 border-b border-gray-100">
-        <nav className="flex items-center space-x-1 bg-gray-100 rounded-full p-1 border border-gray-200 shadow-sm">
-          <button
-            onClick={() => setCurrentView('inbox')}
-            className={`px-5 py-1.5 rounded-full text-sm font-bold transition-colors ${
-              currentView === 'inbox' ? 'bg-black text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'
-            }`}
-          >
-            Inbox
-          </button>
-          <button
-            onClick={() => setCurrentView('reconciliation')}
-            className={`px-5 py-1.5 rounded-full text-sm font-bold transition-colors ${
-              currentView === 'reconciliation' ? 'bg-black text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'
-            }`}
-          >
-            Abgleich
-          </button>
-          <button
-            onClick={() => setCurrentView('exceptions')}
-            className={`px-5 py-1.5 rounded-full text-sm font-bold transition-colors ${
-              currentView === 'exceptions' ? 'bg-black text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'
-            }`}
-          >
-            Exceptions
-          </button>
-          <button
-            onClick={() => setCurrentView('assets')}
-            className={`px-5 py-1.5 rounded-full text-sm font-bold transition-colors ${
-              currentView === 'assets' ? 'bg-black text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'
-            }`}
-          >
-            Anlagen
-          </button>
-          <button
-            onClick={() => setCurrentView('reports')}
-            className={`px-5 py-1.5 rounded-full text-sm font-bold transition-colors ${
-              currentView === 'reports' ? 'bg-black text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'
-            }`}
-          >
-            Auswertungen
-          </button>
+      <div className="flex items-center gap-1 px-6 pt-2 shrink-0 border-b border-gray-100">
+        <nav className="flex items-center gap-0.5">
+          {(
+            [
+              { view: 'inbox', label: 'Inbox' },
+              { view: 'reconciliation', label: 'Abgleich' },
+              { view: 'exceptions', label: 'Exceptions' },
+              { view: 'assets', label: 'Anlagen' },
+              { view: 'reports', label: 'Auswertungen' },
+            ] as { view: AppView; label: string }[]
+          ).map(({ view, label }) => (
+            <button
+              key={view}
+              onClick={() => setCurrentView(view)}
+              className={`px-4 py-2 text-sm font-bold transition-colors rounded-t-lg relative ${
+                currentView === view
+                  ? 'text-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto pb-2">
           <select
             aria-label="Demo Rolle"
             value={role}

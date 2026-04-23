@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Filter, Inbox, Eye, Play, CheckCircle2, CheckSquare, Wand2, FileText, Upload, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Filter,
+  FileText,
+  Inbox,
+  CheckSquare,
+  PanelRightClose,
+  PanelRightOpen,
+  Upload,
+  Wand2,
+} from 'lucide-react';
 import { getQueueCounts, getStatusPresentation, InboxQueueKey, txMatchesQueue } from '../domain/selectors';
 import { normalizeTaxCaseKey, TAX_CASE_OPTIONS, toLegacyTaxCode } from '../domain/taxCases';
 import { getAllowedActions } from '../domain/workflow';
@@ -37,7 +46,7 @@ function nextActionLabel(action: BookingAction | undefined) {
     case 'submit_for_review':
       return 'Einreichen';
     default:
-      return 'Bearbeiten';
+      return 'Buchen';
   }
 }
 
@@ -54,7 +63,8 @@ export default function InboxView({
   const [batchMessage, setBatchMessage] = useState<string>('');
   const [batchAccountSelection, setBatchAccountSelection] = useState<{ id: string; name: string } | null>(null);
   const [bookingTextEdits, setBookingTextEdits] = useState<Record<string, string>>({});
-  const [expandedInlineRows, setExpandedInlineRows] = useState<string[]>([]);
+  const [notesEdits, setNotesEdits] = useState<Record<string, string>>({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const permissionCtx = permissionContextForRole(role);
   const queueCounts = useMemo(() => getQueueCounts(transactions), [transactions]);
@@ -65,6 +75,9 @@ export default function InboxView({
 
   const previewTx = previewId ? filtered.find((tx) => tx.id === previewId) ?? null : null;
   const previewDraft = previewTx ? getBookingDraftByTransactionId(previewTx.id) : undefined;
+  const previewCounterLine = previewDraft?.lines.find((line) => line.accountId !== '1200') ?? previewDraft?.lines[0];
+  const previewAccountEditable = !!previewDraft && !['posted', 'reversed'].includes(previewDraft.workflowStatus);
+
   const selectedSet = new Set(selectedIds);
   const allVisibleSelected = filtered.length > 0 && filtered.every((tx) => selectedSet.has(tx.id));
 
@@ -109,7 +122,6 @@ export default function InboxView({
       onOpenTransaction(tx.id);
       return;
     }
-
     try {
       dispatchBookingAction(tx.id, primary, { role, actorName: role });
       onRefresh();
@@ -127,15 +139,9 @@ export default function InboxView({
 
     ids.forEach((id) => {
       const draft = getBookingDraftByTransactionId(id);
-      if (!draft) {
-        skipped += 1;
-        return;
-      }
+      if (!draft) { skipped += 1; return; }
       const allowed = getAllowedActions(draft.workflowStatus, permissionCtx, draft.validationIssues);
-      if (!allowed.includes(preferredAction)) {
-        skipped += 1;
-        return;
-      }
+      if (!allowed.includes(preferredAction)) { skipped += 1; return; }
       try {
         dispatchBookingAction(id, preferredAction, { role, actorName: role });
         success += 1;
@@ -159,28 +165,19 @@ export default function InboxView({
     if (ids.length === 0) return;
 
     const account = mockAccounts.find((acc) => acc.number === batchAccountSelection.id);
-    if (!account) {
-      setBatchMessage('Gewähltes Konto wurde nicht gefunden.');
-      return;
-    }
+    if (!account) { setBatchMessage('Gewähltes Konto wurde nicht gefunden.'); return; }
 
     let success = 0;
     let skipped = 0;
     ids.forEach((id) => {
       const draft = getBookingDraftByTransactionId(id);
-      if (!draft || ['posted', 'reversed'].includes(draft.workflowStatus)) {
-        skipped += 1;
-        return;
-      }
+      if (!draft || ['posted', 'reversed'].includes(draft.workflowStatus)) { skipped += 1; return; }
       try {
         const nextLines = [...draft.lines];
         const targetIndex = nextLines.findIndex((line) => line.accountId !== '1200');
         const fallbackIndex = nextLines.findIndex((line) => line.accountId === '');
         const index = targetIndex >= 0 ? targetIndex : fallbackIndex >= 0 ? fallbackIndex : 0;
-        if (index < 0) {
-          skipped += 1;
-          return;
-        }
+        if (index < 0) { skipped += 1; return; }
         nextLines[index] = {
           ...nextLines[index],
           accountId: account.number,
@@ -206,13 +203,11 @@ export default function InboxView({
   const updateInboxAccount = (txId: string, accountNumber: string, accountName: string, defaultTaxCode?: string) => {
     const draft = getBookingDraftByTransactionId(txId);
     if (!draft) return;
-
     const nextLines = [...draft.lines];
     const targetIndex = nextLines.findIndex((line) => line.accountId !== '1200');
     const fallbackIndex = nextLines.findIndex((line) => line.accountId === '');
     const index = targetIndex >= 0 ? targetIndex : fallbackIndex >= 0 ? fallbackIndex : 0;
     if (index < 0) return;
-
     nextLines[index] = {
       ...nextLines[index],
       accountId: accountNumber,
@@ -224,7 +219,6 @@ export default function InboxView({
         ?? defaultTaxCode
         ?? '',
     };
-
     saveDraft({ ...draft, lines: nextLines }, role);
     onRefresh();
   };
@@ -232,20 +226,17 @@ export default function InboxView({
   const updateInboxTaxCase = (txId: string, taxCaseValue: string) => {
     const draft = getBookingDraftByTransactionId(txId);
     if (!draft) return;
-
     const nextLines = [...draft.lines];
     const targetIndex = nextLines.findIndex((line) => line.accountId !== '1200');
     const fallbackIndex = nextLines.findIndex((line) => line.accountId === '');
     const index = targetIndex >= 0 ? targetIndex : fallbackIndex >= 0 ? fallbackIndex : 0;
     if (index < 0) return;
-
     const taxCaseKey = normalizeTaxCaseKey(taxCaseValue);
     nextLines[index] = {
       ...nextLines[index],
       taxCaseKey,
       taxCode: toLegacyTaxCode(taxCaseKey) ?? (taxCaseKey ?? ''),
     };
-
     saveDraft({ ...draft, lines: nextLines }, role);
     onRefresh();
   };
@@ -264,73 +255,65 @@ export default function InboxView({
     onRefresh();
   };
 
-  const updateInboxDates = (txId: string, patch: { postingDate?: string; documentDate?: string }) => {
-    const draft = getBookingDraftByTransactionId(txId);
-    if (!draft) return;
-    saveDraft(
-      {
-        ...draft,
-        postingDate: patch.postingDate ?? draft.postingDate,
-        documentDate: patch.documentDate ?? draft.documentDate,
-      },
-      role,
-    );
-    onRefresh();
-  };
-
-  const toggleInlineRowExpanded = (txId: string) => {
-    setExpandedInlineRows((prev) => (prev.includes(txId) ? prev.filter((id) => id !== txId) : [...prev, txId]));
-  };
+  // Derive primary action for previewTx
+  const previewAllowedActions = useMemo(() => {
+    if (!previewDraft) return [];
+    return getAllowedActions(previewDraft.workflowStatus, permissionCtx, previewDraft.validationIssues);
+  }, [previewDraft, permissionCtx]);
+  const previewPrimaryAction = previewAllowedActions.find((a) => ['approve', 'post', 'submit_for_review'].includes(a));
 
   return (
     <div className="flex h-full">
-      <div className="flex flex-col h-full flex-1 min-w-0 border-r border-gray-100">
-        <div className="p-6 border-b border-gray-100 shrink-0 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center text-[#ccff00]">
-                <Inbox size={24} />
-              </div>
-              <div>
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Buchungs-Inbox</h1>
-                <p className="text-gray-500 text-sm mt-0.5 font-medium">
-                  Workflow-Queues, Validierungen und Freigaben (Mockup mit Prozesslogik).
-                </p>
-              </div>
+      {/* ── LEFT: table area ── */}
+      <div className="flex flex-col h-full flex-1 min-w-0">
+        {/* Header — compact two-row layout */}
+        <div className="px-6 pt-3 pb-0 border-b border-gray-100 shrink-0">
+          {/* Row 1: icon + title + Filter + Bankabgleich */}
+          <div className="flex items-center gap-3 pb-3">
+            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-[#ccff00] shrink-0">
+              <Inbox size={15} />
             </div>
-            <div className="flex space-x-3">
-              <button className="h-10 flex items-center space-x-2 px-4 bg-white border border-gray-200 rounded-full text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-                <Filter size={16} />
-                <span>Filter</span>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-sm font-black text-gray-900 leading-tight">Buchungs-Inbox</h1>
+              <p className="text-xs text-gray-400 font-medium leading-tight">
+                Workflow-Queues, Validierungen und Freigaben.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button className="h-8 flex items-center gap-1.5 px-3 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors">
+                <Filter size={13} />
+                Filter
               </button>
-              <button className="h-10 px-5 bg-black rounded-full text-sm font-bold text-white shadow-sm hover:bg-gray-900 transition-colors">
+              <button className="h-8 px-4 bg-black rounded-full text-xs font-bold text-white hover:bg-gray-900 transition-colors">
                 Bankabgleich (n/a)
               </button>
             </div>
           </div>
 
-          <InboxQueueTabs activeQueue={activeQueue} counts={queueCounts} onChange={setActiveQueue} />
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={toggleSelectAllVisible}
-              className="h-9 px-3 rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1 transition-colors"
-            >
-              <CheckSquare size={13} />
-              {allVisibleSelected ? 'Auswahl aufheben' : 'Sichtbare markieren'}
-            </button>
-            <button
-              onClick={selectSimilarToPreview}
-              disabled={!previewTx}
-              className="h-9 px-3 rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40 inline-flex items-center gap-1 transition-colors"
-            >
-              <Wand2 size={13} />
-              Ähnliche markieren
-            </button>
+          {/* Row 2: queue tabs + select tools */}
+          <div className="flex items-center gap-3 pb-2">
+            <InboxQueueTabs activeQueue={activeQueue} counts={queueCounts} onChange={setActiveQueue} />
+            <div className="ml-auto flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={toggleSelectAllVisible}
+                className="h-7 px-2.5 rounded-full border border-gray-200 bg-white text-[11px] font-bold text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1 transition-colors"
+              >
+                <CheckSquare size={11} />
+                {allVisibleSelected ? 'Auswahl aufheben' : 'Sichtbare markieren'}
+              </button>
+              <button
+                onClick={selectSimilarToPreview}
+                disabled={!previewTx}
+                className="h-7 px-2.5 rounded-full border border-gray-200 bg-white text-[11px] font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40 inline-flex items-center gap-1 transition-colors"
+              >
+                <Wand2 size={11} />
+                Ähnliche markieren
+              </button>
+            </div>
           </div>
 
           {selectedIds.length > 0 && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm font-medium text-gray-700">
                 <span className="font-bold">{selectedIds.length}</span> Vorgänge markiert für Sammelverarbeitung
               </div>
@@ -385,6 +368,21 @@ export default function InboxView({
           )}
         </div>
 
+        {/* Toolbar row with count + Einklappen */}
+        <div className="flex items-center justify-between px-6 py-2.5 border-b border-gray-100 bg-gray-50/40 shrink-0">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+            {filtered.length} Vorgänge
+          </span>
+          <button
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            className="h-8 px-3 rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1.5 transition-colors"
+          >
+            {sidebarCollapsed ? <PanelRightOpen size={13} /> : <PanelRightClose size={13} />}
+            {sidebarCollapsed ? 'Einblenden' : 'Einklappen'}
+          </button>
+        </div>
+
+        {/* Compact table */}
         <div className="flex-1 overflow-auto p-6">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -398,20 +396,17 @@ export default function InboxView({
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th scope="col" className="px-3 py-3 w-[128px]">Workflow</th>
-                <th scope="col" className="px-3 py-3 w-[108px]">Datum</th>
-                <th scope="col" className="px-3 py-3 w-[180px]">Empfänger / Absender</th>
-                <th scope="col" className="px-3 py-3 w-[360px]">Transaktionsdetails & Text</th>
-                <th scope="col" className="px-3 py-3 w-[400px]">Schnellbuchung (Inline)</th>
-                <th scope="col" className="px-3 py-3 w-[130px] text-right">Betrag</th>
-                <th scope="col" className="px-3 py-3 w-[150px] text-right">Issues</th>
-                <th scope="col" className="px-3 py-3 w-[140px] text-right">Aktion</th>
+                <th scope="col" className="px-3 py-3 w-[128px]">STATUS</th>
+                <th scope="col" className="px-3 py-3 w-[90px]">DATUM</th>
+                <th scope="col" className="px-3 py-3">EMPFÄNGER / ZWECK</th>
+                <th scope="col" className="px-3 py-3 text-right w-[180px]">ISSUES</th>
+                <th scope="col" className="px-3 py-3 text-right w-[130px]">BETRAG</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12">
+                  <td colSpan={6} className="px-6 py-12">
                     <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
                       <div className="text-sm font-bold text-gray-700">Keine Vorgänge in dieser Queue</div>
                       <div className="mt-1 text-sm text-gray-500">Passe Filter oder Queue an, um Vorgänge anzuzeigen.</div>
@@ -421,36 +416,17 @@ export default function InboxView({
               ) : null}
               {filtered.map((tx) => {
                 const draft = getBookingDraftByTransactionId(tx.id);
-                const allowed = draft ? getAllowedActions(draft.workflowStatus, permissionCtx, draft.validationIssues) : [];
                 const status = getStatusPresentation(tx.workflowStatus);
-                const primary = allowed.find((a) => ['approve', 'post', 'submit_for_review'].includes(a));
-                const counterLine = draft?.lines.find((line) => line.accountId !== '1200') ?? draft?.lines[0];
-                const accountEditable = !!draft && !['posted', 'reversed'].includes(draft.workflowStatus);
-                const inlineIssues = draft?.validationIssues.slice(0, 3) ?? [];
-                const isExpanded = expandedInlineRows.includes(tx.id);
-                const blockerCount = draft?.validationIssues.filter((issue) => issue.blocking).length ?? 0;
-                const warningCount = draft?.validationIssues.filter((issue) => issue.severity === 'warning').length ?? 0;
                 const isSelectedPreview = previewTx?.id === tx.id;
-                const hasUnsavedTextEdit =
-                  bookingTextEdits[tx.id] !== undefined && bookingTextEdits[tx.id] !== (draft?.bookingText ?? '');
-                const readiness =
-                  !draft
-                    ? { label: 'Kein Entwurf', className: 'bg-gray-100 text-gray-600' }
-                    : blockerCount > 0
-                      ? { label: `Blockiert (${blockerCount})`, className: 'bg-red-100 text-red-700' }
-                      : warningCount > 0
-                        ? { label: `Prüfbar (${warningCount} Warn.)`, className: 'bg-amber-100 text-amber-700' }
-                        : { label: 'Bereit zum Buchen', className: 'bg-emerald-100 text-emerald-700' };
+                const blockerCount = draft?.validationIssues.filter((issue) => issue.blocking).length ?? 0;
 
                 return (
                   <tr
                     key={tx.id}
+                    onClick={() => setPreviewId((current) => (current === tx.id ? null : tx.id))}
                     className={`hover:bg-gray-50/60 transition-colors cursor-pointer ${
                       isSelectedPreview ? 'bg-gray-50/90 shadow-[inset_3px_0_0_0_#111827]' : ''
-                    } ${
-                      blockerCount > 0 ? 'shadow-[inset_1px_0_0_0_#fecaca]' : ''
-                    }`}
-                    onClick={() => setPreviewId((current) => (current === tx.id ? null : tx.id))}
+                    } ${blockerCount > 0 ? 'shadow-[inset_1px_0_0_0_#fecaca]' : ''}`}
                   >
                     <td className="px-3 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -467,222 +443,19 @@ export default function InboxView({
                       </span>
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 font-medium align-top">
-                      {new Date(tx.date).toLocaleDateString('de-DE')}
+                      {new Date(tx.date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm font-bold text-gray-900 align-top">{tx.payee}</td>
-                    <td className="px-3 py-4 align-top min-w-[20rem]">
-                      <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 space-y-3">
-                        <div className="space-y-1">
-                          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Verwendungszweck</div>
-                          <div className="text-sm text-gray-700 leading-snug line-clamp-3">{tx.description}</div>
-                        </div>
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <label className="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">
-                            Buchungstext
-                          </label>
-                          <input
-                            type="text"
-                            value={bookingTextEdits[tx.id] ?? draft?.bookingText ?? ''}
-                            disabled={!draft || !accountEditable}
-                            onChange={(e) =>
-                              setBookingTextEdits((prev) => ({
-                                ...prev,
-                                [tx.id]: e.target.value,
-                              }))
-                            }
-                            onBlur={() => commitInboxBookingText(tx.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            placeholder="Buchungstext direkt in Inbox"
-                            className={`h-10 w-full border rounded-xl px-3 py-2 text-sm bg-white disabled:bg-gray-50 ${
-                              hasUnsavedTextEdit ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-200'
-                            }`}
-                          />
-                          {hasUnsavedTextEdit ? (
-                            <div className="mt-1 text-[11px] font-medium text-amber-700">Ungespeichert – Enter oder Fokuswechsel speichert.</div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-4 align-top min-w-[22rem]" onClick={(e) => e.stopPropagation()}>
-                      {draft ? (
-                        <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-3">
-                          <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">
-                              Konto
-                            </label>
-                            <AccountCombobox
-                              accounts={mockAccounts}
-                              valueAccountId={counterLine?.accountId ?? ''}
-                              valueAccountName={counterLine?.accountName ?? ''}
-                              disabled={!accountEditable}
-                              placeholder="Konto (Inbox)"
-                              onSelect={(account) =>
-                                updateInboxAccount(tx.id, account.number, account.name, account.defaultTaxCode)
-                              }
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
-                            <div>
-                              <label className="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">
-                                Steuerfall
-                              </label>
-                              <select
-                                aria-label={`${tx.payee} Steuerschlüssel`}
-                                value={normalizeTaxCaseKey(counterLine?.taxCaseKey ?? counterLine?.taxCode) ?? ''}
-                                disabled={!accountEditable}
-                                onChange={(e) => updateInboxTaxCase(tx.id, e.target.value)}
-                                className="h-10 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white disabled:bg-gray-50"
-                              >
-                                <option value="">Keine</option>
-                                {TAX_CASE_OPTIONS.map((option) => (
-                                  <option key={option.key} value={option.key}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">
-                                Beleg
-                              </label>
-                              {tx.hasReceipt ? (
-                                <button
-                                  onClick={() => updateReceiptInline(tx.id, false)}
-                                  disabled={!accountEditable}
-                                  className="h-10 min-w-[112px] px-3 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center justify-center gap-1"
-                                >
-                                  <FileText size={13} />
-                                  Vorhanden
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => updateReceiptInline(tx.id, true)}
-                                  disabled={!accountEditable}
-                                  className="h-10 min-w-[112px] px-3 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-bold hover:bg-gray-50 disabled:opacity-50 inline-flex items-center justify-center gap-1"
-                                >
-                                  <Upload size={13} />
-                                  Hinzufügen
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {isExpanded && (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">
-                                  Buchungsdatum
-                                </label>
-                                <input
-                                  type="date"
-                                  value={draft.postingDate ?? ''}
-                                  disabled={!accountEditable}
-                                  onChange={(e) => updateInboxDates(tx.id, { postingDate: e.target.value })}
-                                  className="h-10 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white disabled:bg-gray-50"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">
-                                  Belegdatum
-                                </label>
-                                <input
-                                  type="date"
-                                  value={draft.documentDate ?? ''}
-                                  disabled={!accountEditable}
-                                  onChange={(e) => updateInboxDates(tx.id, { documentDate: e.target.value })}
-                                  className="h-10 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white disabled:bg-gray-50"
-                                />
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between gap-2 pt-0.5">
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                              Schnellbuchung
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${readiness.className}`}>
-                                {readiness.label}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => toggleInlineRowExpanded(tx.id)}
-                                className="h-7 px-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide"
-                                aria-label={isExpanded ? 'Inline-Schnellbuchung einklappen' : 'Inline-Schnellbuchung ausklappen'}
-                              >
-                                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                {isExpanded ? 'Weniger' : 'Mehr'}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-gray-300">-</span>
-                      )}
-                      {inlineIssues.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {inlineIssues.map((issue) => (
-                            <span
-                              key={issue.id}
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                issue.severity === 'error'
-                                  ? 'bg-red-100 text-red-700'
-                                  : issue.severity === 'warning'
-                                    ? 'bg-amber-100 text-amber-700'
-                                    : 'bg-gray-100 text-gray-700'
-                              }`}
-                              title={issue.message}
-                            >
-                              {issue.code}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className={`px-3 py-4 whitespace-nowrap text-sm font-bold text-right align-top ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                      {formatCurrency(tx.amount, tx.currency)}
+                    <td className="px-3 py-4 align-top">
+                      <div className="font-bold text-gray-900 text-sm">{tx.payee}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{tx.description}</div>
                     </td>
                     <td className="px-3 py-4 text-right align-top">
-                      <div className="flex flex-col items-end gap-2 pt-0.5">
+                      <div className="flex flex-col items-end gap-1">
                         <IssueBadges transaction={tx} />
                       </div>
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-right align-top">
-                      <div className="flex flex-col items-end gap-2 mt-0.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenTransaction(tx.id);
-                          }}
-                          className="w-[122px] h-9 px-3 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 text-center transition-colors"
-                        >
-                          {tx.workflowStatus === 'posted' ? 'Ansehen' : 'Bearbeiten'}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleInlineAction(tx);
-                          }}
-                          className="w-[122px] h-9 px-3 rounded-full bg-black text-white text-sm font-bold hover:bg-gray-900 text-center transition-colors"
-                        >
-                          {nextActionLabel(primary)}
-                        </button>
-                        {draft && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleInlineRowExpanded(tx.id);
-                            }}
-                            className="w-[122px] h-8 px-3 rounded-full border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 inline-flex items-center justify-center gap-1 transition-colors"
-                          >
-                            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                            {isExpanded ? 'Kompakt' : 'Erweitern'}
-                          </button>
-                        )}
-                      </div>
+                    <td className={`px-3 py-4 whitespace-nowrap text-sm font-bold text-right align-top ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                      {formatCurrency(tx.amount, tx.currency)}
                     </td>
                   </tr>
                 );
@@ -692,83 +465,181 @@ export default function InboxView({
         </div>
       </div>
 
+      {/* ── RIGHT: editing sidebar ── */}
       <aside
-        className={`hidden xl:flex shrink-0 bg-gray-50/50 border-l border-gray-100 flex-col gap-4 overflow-hidden transition-all duration-300 ${
-          previewTx ? 'w-[24rem] p-6 opacity-100 translate-x-0' : 'w-0 p-0 opacity-0 translate-x-4 pointer-events-none'
+        className={`shrink-0 flex flex-col h-full border-l border-gray-100 transition-all duration-300 overflow-hidden ${
+          !sidebarCollapsed ? 'w-80 xl:w-[22rem] opacity-100' : 'w-0 opacity-0 pointer-events-none'
         }`}
-        aria-hidden={!previewTx}
+        aria-hidden={sidebarCollapsed}
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Quick Preview</h2>
-          {previewTx && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPreviewId(null)}
-                className="text-xs font-bold text-gray-500 hover:text-gray-800"
-              >
-                Schließen
-              </button>
-              <button
-                onClick={() => onOpenTransaction(previewTx.id)}
-                className="text-sm font-bold text-black hover:underline inline-flex items-center gap-1"
-              >
-                <Eye size={14} />
-                Öffnen
-              </button>
-            </div>
-          )}
-        </div>
-
         {!previewTx || !previewDraft ? (
-          <div className="border border-gray-200 rounded-xl bg-white p-4 text-sm text-gray-500">
-            Keine Transaktion in der aktuellen Queue.
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 text-sm p-6 text-center gap-3">
+            <Inbox size={28} className="text-gray-300" />
+            <span>Transaktion auswählen um die Schnellbuchung zu starten</span>
           </div>
         ) : (
           <>
-            <div className="border border-gray-200 rounded-xl bg-white p-4 space-y-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                {getStatusPresentation(previewTx.workflowStatus).label}
+            {/* Header card */}
+            <div className="p-4 border-b border-gray-100 shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-bold text-gray-900 leading-tight truncate">{previewTx.payee}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {new Date(previewTx.date).toLocaleDateString('de-DE')}
+                    {previewDraft.externalReference ? ` · ${previewDraft.externalReference}` : ''}
+                  </div>
+                </div>
+                <div className={`text-base font-bold shrink-0 ${previewTx.amount < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {formatCurrency(previewTx.amount, previewTx.currency)}
+                </div>
               </div>
-              <div>
-                <div className="font-bold text-gray-900">{previewTx.payee}</div>
-                <div className="text-sm text-gray-500">{previewTx.description}</div>
-              </div>
-              <div className={`text-xl font-bold ${previewTx.amount < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                {formatCurrency(previewTx.amount, previewTx.currency)}
-              </div>
-              <div className="text-sm text-gray-600">
-                Vorschlag: <span className="font-medium">{previewTx.suggestion ?? 'Kein Vorschlag'}</span>
-                {typeof previewTx.suggestionConfidence === 'number' && (
-                  <span className="ml-2 text-xs text-gray-400">
-                    ({Math.round(previewTx.suggestionConfidence * 100)}%)
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getStatusPresentation(previewTx.workflowStatus).className}`}>
+                  {getStatusPresentation(previewTx.workflowStatus).label}
+                </span>
+                {!previewTx.hasReceipt && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
+                    Ohne Beleg
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="border border-gray-200 rounded-xl bg-white p-4">
-              <div className="text-sm font-bold text-gray-800 mb-2">Top-Probleme</div>
-              {previewDraft.validationIssues.slice(0, 4).length === 0 ? (
-                <div className="text-sm text-emerald-700">Keine offenen Validierungsprobleme.</div>
-              ) : (
-                <ul className="space-y-2">
-                  {previewDraft.validationIssues.slice(0, 4).map((issue) => (
-                    <li key={issue.id} className="text-sm text-gray-700">
-                      <span className={`inline-block w-2 h-2 rounded-full mr-2 ${issue.severity === 'error' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                      {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
+            {/* Scrollable editing form */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+              {/* TRANSAKTIONSDETAILS */}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                  Transaktionsdetails
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500 shrink-0">Verwendungszweck</span>
+                    <span className="font-medium text-gray-800 text-right line-clamp-2">
+                      {previewTx.description ?? '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500 shrink-0">Buchungstext</span>
+                    <span className="font-medium text-gray-800 text-right">
+                      {previewDraft.bookingText || '—'}
+                    </span>
+                  </div>
+                  {previewTx.suggestion && (
+                    <div className="flex justify-between gap-3">
+                      <span className="text-gray-500 shrink-0">Kategorie</span>
+                      <span className="font-medium text-gray-800 text-right">{previewTx.suggestion}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* SCHNELLBUCHUNG */}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+                  Schnellbuchung
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Konto</label>
+                    <AccountCombobox
+                      accounts={mockAccounts}
+                      valueAccountId={previewCounterLine?.accountId ?? ''}
+                      valueAccountName={previewCounterLine?.accountName ?? ''}
+                      disabled={!previewAccountEditable}
+                      onSelect={(account) =>
+                        updateInboxAccount(previewTx.id, account.number, account.name, account.defaultTaxCode)
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Steuerfall</label>
+                    <select
+                      value={normalizeTaxCaseKey(previewCounterLine?.taxCaseKey ?? previewCounterLine?.taxCode) ?? ''}
+                      disabled={!previewAccountEditable}
+                      onChange={(e) => updateInboxTaxCase(previewTx.id, e.target.value)}
+                      className="h-10 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white disabled:bg-gray-50"
+                    >
+                      <option value="">Keine</option>
+                      {TAX_CASE_OPTIONS.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Beleg</label>
+                    {previewTx.hasReceipt ? (
+                      <button
+                        onClick={() => updateReceiptInline(previewTx.id, false)}
+                        disabled={!previewAccountEditable}
+                        className="w-full h-10 px-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-bold hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                      >
+                        <FileText size={14} /> Beleg vorhanden
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => updateReceiptInline(previewTx.id, true)}
+                        disabled={!previewAccountEditable}
+                        className="w-full h-10 px-3 rounded-xl border border-dashed border-gray-300 bg-white text-gray-500 text-sm font-bold hover:bg-gray-50 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                      >
+                        <Upload size={14} /> + Beleg hinzufügen
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Notiz</label>
+                    <textarea
+                      value={notesEdits[previewTx.id] ?? ''}
+                      onChange={(e) =>
+                        setNotesEdits((prev) => ({ ...prev, [previewTx.id]: e.target.value }))
+                      }
+                      placeholder="Optionale Notiz..."
+                      rows={3}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Buchungstext bearbeiten</label>
+                    <input
+                      type="text"
+                      value={bookingTextEdits[previewTx.id] ?? previewDraft.bookingText ?? ''}
+                      disabled={!previewAccountEditable}
+                      onChange={(e) =>
+                        setBookingTextEdits((prev) => ({ ...prev, [previewTx.id]: e.target.value }))
+                      }
+                      onBlur={() => commitInboxBookingText(previewTx.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      }}
+                      placeholder="Buchungstext eingeben"
+                      className="h-10 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white disabled:bg-gray-50"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <button
-              onClick={() => handleInlineAction(previewTx)}
-              className="w-full px-4 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-900 inline-flex items-center justify-center gap-2"
-            >
-              {previewDraft.workflowStatus === 'pending_approval' ? <CheckCircle2 size={16} /> : <Play size={16} />}
-              <span>Primäraktion ausführen</span>
-            </button>
+            {/* Action bar */}
+            <div className="p-4 border-t border-gray-100 flex gap-2 shrink-0">
+              <button
+                onClick={() => handleInlineAction(previewTx)}
+                className="flex-1 py-3 rounded-xl bg-black text-white font-bold text-sm hover:bg-gray-900 transition-colors"
+              >
+                {nextActionLabel(previewPrimaryAction)}
+              </button>
+              <button
+                onClick={() => onOpenTransaction(previewTx.id)}
+                className="px-5 py-3 rounded-xl border border-gray-200 font-bold text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Erweitern
+              </button>
+            </div>
           </>
         )}
       </aside>
