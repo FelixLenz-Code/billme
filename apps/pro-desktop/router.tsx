@@ -35,6 +35,7 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { ProAccountingPage } from './components/ProAccountingPage';
 import { FinanceHubView } from './components/FinanceHubView';
+import { shouldShowBusinessOnboarding } from '@billme/ui';
 
 const RootLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -42,9 +43,7 @@ const RootLayout: React.FC = () => {
   const [showShortcuts, setShowShortcuts] = React.useState(false);
 
   const { data: settings } = useSettingsQuery();
-  const showOnboarding = Boolean(
-    settings && !settings.onboardingCompleted && !settings.company.name.trim()
-  );
+  const showOnboarding = shouldShowBusinessOnboarding(settings);
 
   const activePage = (() => {
     if (
