@@ -13,6 +13,20 @@ import type {
 } from '../types';
 import type { IpcArgs, IpcResult, IpcRouteKey } from './contract';
 import {
+  chooseDefaultBillingAddress,
+  chooseDefaultBillingEmail,
+  ensureDefaultProjectForClient as ensureDefaultProjectForClientDomain,
+  finalizeDocumentNumber,
+  prepareClientForUpsert,
+  releaseDocumentNumber,
+  reserveDocumentNumber,
+} from '@billme/server-core/services';
+import type {
+  DocumentNumberKind,
+  SyncDefaultProjectPorts,
+  SyncDocumentNumberingPorts,
+} from '@billme/server-core/ports';
+import {
   MOCK_ACCOUNTS,
   MOCK_ARTICLES,
   MOCK_CLIENTS,
@@ -37,17 +51,6 @@ const projects: Project[] = [];
 for (const c of clients) {
   for (const p of c.projects ?? []) {
     projects.push({ ...p, clientId: c.id });
-  }
-  if (!projects.some((p) => p.clientId === c.id && p.name === 'Allgemein' && !p.archivedAt)) {
-    projects.push({
-      id: `p_${Math.random().toString(36).slice(2)}`,
-      clientId: c.id,
-      code: 'PRJ-2026-001',
-      name: 'Allgemein',
-      status: 'active',
-      budget: 0,
-      startDate: new Date().toISOString().split('T')[0],
-    });
   }
 }
 
@@ -128,121 +131,94 @@ const eurKeywordRules: Array<{ includes: string[]; lineId: string }> = [
 
 type NumberReservation = {
   id: string;
-  kind: 'invoice' | 'offer' | 'customer';
+  kind: DocumentNumberKind;
   number: string;
   counterValue: number;
   status: 'reserved' | 'released' | 'finalized';
   documentId: string | null;
 };
 const numberReservations = new Map<string, NumberReservation>();
-
-const formatDocumentNumber = (
-  kind: 'invoice' | 'offer' | 'customer',
-  counterValue: number,
-): string => {
-  const prefixTemplate =
-    kind === 'invoice'
-      ? settings.numbers.invoicePrefix
-      : kind === 'offer'
-        ? settings.numbers.offerPrefix
-        : settings.numbers.customerPrefix;
-  const prefix = prefixTemplate.replace(/%Y/g, String(new Date().getFullYear()));
-  const padLength = Math.max(
-    1,
-    Math.floor(
-      kind === 'customer'
-        ? settings.numbers.customerNumberLength || 4
-        : settings.numbers.numberLength || 3,
-    ),
-  );
-  return `${prefix}${String(counterValue).padStart(padLength, '0')}`;
-};
-
-const isCustomerNumberTaken = (number: string): boolean => {
-  if (clients.some((client) => client.customerNumber === number)) {
-    return true;
-  }
-  return [...numberReservations.values()].some(
-    (reservation) =>
-      reservation.kind === 'customer'
-      && reservation.number === number
-      && reservation.status !== 'released',
-  );
-};
-
-const reserveNumber = (
-  kind: 'invoice' | 'offer' | 'customer',
-): { reservationId: string; number: string } => {
-  let counterValue = Math.max(
-    1,
-    kind === 'invoice'
-      ? settings.numbers.nextInvoiceNumber
-      : kind === 'offer'
-        ? settings.numbers.nextOfferNumber
-        : settings.numbers.nextCustomerNumber,
-  );
-  let number = formatDocumentNumber(kind, counterValue);
-  if (kind === 'customer') {
-    while (isCustomerNumberTaken(number)) {
-      counterValue += 1;
-      number = formatDocumentNumber(kind, counterValue);
+const documentNumberingPorts: SyncDocumentNumberingPorts<AppSettings> = {
+  tx: {
+    inTransaction<TResult>(work: () => TResult): TResult {
+      return work();
+    },
+  },
+  getSettings: () => settings,
+  saveSettings: (nextSettings) => {
+    settings = structuredClone(nextSettings);
+  },
+  createReservation: (reservation) => {
+    numberReservations.set(reservation.id, { ...reservation });
+  },
+  getReservationById: (reservationId) => {
+    const reservation = numberReservations.get(reservationId);
+    return reservation ? { ...reservation } : null;
+  },
+  updateReservation: (reservation) => {
+    numberReservations.set(reservation.id, { ...reservation });
+  },
+  isNumberTaken: (kind, number) => {
+    const entityTaken = kind === 'customer'
+      ? clients.some((client) => client.customerNumber === number)
+      : (kind === 'invoice' ? invoices : offers).some((document) => document.number === number);
+    if (entityTaken) {
+      return true;
     }
-  }
-  if (kind === 'invoice') {
-    settings.numbers.nextInvoiceNumber = counterValue + 1;
-  } else if (kind === 'offer') {
-    settings.numbers.nextOfferNumber = counterValue + 1;
-  } else {
-    settings.numbers.nextCustomerNumber = counterValue + 1;
-  }
+    return [...numberReservations.values()].some(
+      (reservation) =>
+        reservation.kind === kind &&
+        reservation.number === number &&
+        reservation.status !== 'released',
+    );
+  },
+  generateReservationId: () => Math.random().toString(36).slice(2),
+};
 
-  const reservationId = Math.random().toString(36).slice(2);
-  numberReservations.set(reservationId, {
-    id: reservationId,
-    kind,
-    number,
-    counterValue,
-    status: 'reserved',
-    documentId: null,
-  });
-
-  return { reservationId, number };
+const reserveNumber = (kind: DocumentNumberKind): { reservationId: string; number: string } => {
+  return reserveDocumentNumber(documentNumberingPorts, kind);
 };
 
 const releaseNumber = (reservationId: string): { ok: true } => {
-  const reservation = numberReservations.get(reservationId);
-  if (!reservation || reservation.status !== 'reserved') {
-    return { ok: true };
-  }
-
-  if (reservation.kind === 'invoice') {
-    if (settings.numbers.nextInvoiceNumber === reservation.counterValue + 1) {
-      settings.numbers.nextInvoiceNumber = Math.max(1, reservation.counterValue);
-    }
-  } else if (reservation.kind === 'offer') {
-    if (settings.numbers.nextOfferNumber === reservation.counterValue + 1) {
-      settings.numbers.nextOfferNumber = Math.max(1, reservation.counterValue);
-    }
-  } else if (settings.numbers.nextCustomerNumber === reservation.counterValue + 1) {
-    settings.numbers.nextCustomerNumber = Math.max(1, reservation.counterValue);
-  }
-
-  reservation.status = 'released';
-  return { ok: true };
+  return releaseDocumentNumber(documentNumberingPorts, reservationId);
 };
 
 const finalizeNumber = (reservationId: string, documentId: string): { ok: true } => {
-  const reservation = numberReservations.get(reservationId);
-  if (!reservation || reservation.status === 'finalized') {
-    return { ok: true };
-  }
-  if (reservation.status !== 'reserved') {
-    throw new Error(`Cannot finalize reservation in status "${reservation.status}"`);
-  }
-  reservation.status = 'finalized';
-  reservation.documentId = documentId;
-  return { ok: true };
+  return finalizeDocumentNumber(documentNumberingPorts, reservationId, documentId);
 };
+
+const defaultProjectPorts: SyncDefaultProjectPorts<Project & { clientId: string }> = {
+  tx: {
+    inTransaction<TResult>(work: () => TResult): TResult {
+      return work();
+    },
+  },
+  getActiveDefaultProjectForClient: (clientId) => {
+    const project = projects.find((entry) => entry.clientId === clientId && entry.name === 'Allgemein' && !entry.archivedAt);
+    return project ? project as Project & { clientId: string } : null;
+  },
+  listProjectCodesByPrefix: (prefix) => {
+    return projects
+      .map((project) => project.code)
+      .filter((code): code is string => typeof code === 'string' && code.startsWith(prefix));
+  },
+  saveProject: (project) => {
+    const saved = structuredClone(project);
+    projects.unshift(saved);
+    return saved;
+  },
+};
+
+const ensureDefaultProject = (clientId: string): Project => {
+  return ensureDefaultProjectForClientDomain(defaultProjectPorts, {
+    clientId,
+    createProjectId: () => `p_${Math.random().toString(36).slice(2)}`,
+  }).project;
+};
+
+for (const client of clients) {
+  ensureDefaultProject(client.id);
+}
 
 const offers: Invoice[] = [
   {
@@ -643,25 +619,22 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<
     case 'clients:upsert': {
       const { client } = args as IpcArgs<'clients:upsert'>;
       const normalized = structuredClone(client) as Client;
-      const trimmedCustomerNumber = normalized.customerNumber?.trim();
-      if (trimmedCustomerNumber) {
-        const conflict = clients.find(
-          (c) => c.id !== normalized.id && c.customerNumber === trimmedCustomerNumber,
-        );
-        if (conflict) {
-          throw new Error('Kundennummer bereits vergeben');
-        }
-        normalized.customerNumber = trimmedCustomerNumber;
-      } else {
-        const reservation = reserveNumber('customer');
-        normalized.customerNumber = reservation.number;
-        finalizeNumber(reservation.reservationId, normalized.id);
+      const existingCustomerNumber = clients.find((currentClient) => currentClient.id === normalized.id)?.customerNumber ?? '';
+      const prepared = prepareClientForUpsert(normalized, {
+        existingCustomerNumber,
+        customerNumberExists: (customerNumber: string) => {
+          return clients.some((currentClient) => currentClient.id !== normalized.id && currentClient.customerNumber === customerNumber);
+        },
+        reserveCustomerNumber: () => reserveNumber('customer'),
+      });
+      const { customerNumberReservationId, ...storedClient } = prepared;
+      if (customerNumberReservationId) {
+        finalizeNumber(customerNumberReservationId, normalized.id);
       }
-
       const idx = clients.findIndex((c) => c.id === normalized.id);
-      if (idx >= 0) clients[idx] = normalized;
-      else clients.unshift(normalized);
-      return structuredClone(normalized) as IpcResult<K>;
+      if (idx >= 0) clients[idx] = storedClient;
+      else clients.unshift(storedClient);
+      return structuredClone(storedClient) as IpcResult<K>;
     }
     case 'clients:delete': {
       const { id } = args as IpcArgs<'clients:delete'>;
@@ -777,34 +750,13 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<
       const client = clients.find((c) => c.id === clientId);
       if (!client) throw new Error('Client not found');
 
-      const defaultProject =
-        projects.find((p) => p.clientId === clientId && p.name === 'Allgemein' && !p.archivedAt) ??
-        (() => {
-          const p: Project = {
-            id: Math.random().toString(36).substr(2, 9),
-            clientId,
-            code: 'PRJ-2026-001',
-            name: 'Allgemein',
-            status: 'active',
-            budget: 0,
-            startDate: new Date().toISOString().split('T')[0],
-          };
-          projects.unshift(p);
-          return p;
-        })();
+      const defaultProject = ensureDefaultProject(clientId);
 
       const today = new Date().toISOString().split('T')[0];
-      const billingAddress =
-        (client.addresses ?? []).find((a: any) => a.isDefaultBilling) ??
-        (client.addresses ?? [])[0] ??
-        null;
+      const billingAddress = chooseDefaultBillingAddress(client.addresses ?? []) ?? client.addresses?.[0] ?? null;
       const shippingAddress =
         (client.addresses ?? []).find((a: any) => a.isDefaultShipping) ?? billingAddress ?? null;
-      const billingEmail =
-        (client.emails ?? []).find((e: any) => e.isDefaultBilling) ??
-        (client.emails ?? []).find((e: any) => e.isDefaultGeneral) ??
-        (client.emails ?? [])[0] ??
-        null;
+      const billingEmail = chooseDefaultBillingEmail(client.emails ?? []) ?? client.emails?.[0] ?? null;
       const numberReservation = reserveNumber(kind === 'offer' ? 'offer' : 'invoice');
 
       const doc: Invoice = {
