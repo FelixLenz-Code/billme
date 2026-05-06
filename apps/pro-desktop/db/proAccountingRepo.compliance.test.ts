@@ -7,6 +7,7 @@ import {
   insertDatevExport,
   postDraft,
 } from './proAccountingRepo';
+import { createProTenantScope } from '../tenantScope';
 
 const createDb = (): Database.Database => {
   const db = new Database(':memory:');
@@ -50,14 +51,15 @@ const seedBankTransaction = (db: Database.Database, id: string, date: string, am
 describe.skipIf(!canRunNativeSqlite)('proAccountingRepo compliance controls', () => {
   it('blocks posting in closed period', () => {
     const db = createDb();
+    const scope = createProTenantScope('default');
 
     seedBankTransaction(db, 'tx-closed-1', '2026-02-15');
-    const draft = getDraftByTransactionId(db, 'tx-closed-1');
+    const draft = getDraftByTransactionId(db, 'tx-closed-1', scope);
     expect(draft).toBeTruthy();
 
-    db.prepare("UPDATE accounting_periods SET status = 'closed' WHERE tenant_id = 'default' AND period = '2026-02'").run();
+    db.prepare("UPDATE accounting_periods SET status = 'closed' WHERE tenant_id = ? AND period = '2026-02'").run(scope.tenantId);
 
-    const result = postDraft(db, draft!.id, { postingDate: '2026-02-15' });
+    const result = postDraft(db, draft!.id, { postingDate: '2026-02-15' }, scope);
     expect(result.issues.some((issue) => issue.code === 'POSTING_DATE_IN_CLOSED_PERIOD')).toBe(true);
 
     const postedCount = (db.prepare('SELECT COUNT(*) as c FROM journal_entries').get() as { c: number }).c;
@@ -66,12 +68,13 @@ describe.skipIf(!canRunNativeSqlite)('proAccountingRepo compliance controls', ()
 
   it('enforces immutable journals and datev export records', () => {
     const db = createDb();
+    const scope = createProTenantScope('default');
 
     seedBankTransaction(db, 'tx-immut-1', '2026-03-01', -200);
-    const draft = getDraftByTransactionId(db, 'tx-immut-1');
+    const draft = getDraftByTransactionId(db, 'tx-immut-1', scope);
     expect(draft).toBeTruthy();
 
-    const post = postDraft(db, draft!.id, { postingDate: '2026-03-01' });
+    const post = postDraft(db, draft!.id, { postingDate: '2026-03-01' }, scope);
     expect(post.issues.length).toBe(0);
     expect(post.entry.id).toBeTruthy();
 
@@ -96,7 +99,7 @@ describe.skipIf(!canRunNativeSqlite)('proAccountingRepo compliance controls', ()
       recordCount: 1,
       fromDate: '2026-03-01',
       toDate: '2026-03-31',
-    });
+    }, scope);
 
     expect(() =>
       db.prepare("UPDATE datev_exports SET file_path = '/tmp/tampered.csv' WHERE id = ?").run(datev.id),

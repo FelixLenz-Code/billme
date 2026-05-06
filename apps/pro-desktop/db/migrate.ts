@@ -156,15 +156,42 @@ export const runMigrations = (db: Database.Database): void => {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS pro_workflow_entries (
-      transaction_id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      transaction_id TEXT NOT NULL,
       transaction_json TEXT NOT NULL,
       draft_json TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, transaction_id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_pro_workflow_entries_updated
-      ON pro_workflow_entries(updated_at DESC);
+      ON pro_workflow_entries(tenant_id, updated_at DESC);
   `);
+
+  const workflowColumns = getColumns(db, 'pro_workflow_entries');
+  if (workflowColumns.size > 0 && !workflowColumns.has('tenant_id')) {
+    db.exec(`
+      ALTER TABLE pro_workflow_entries RENAME TO pro_workflow_entries_legacy;
+
+      CREATE TABLE pro_workflow_entries (
+        tenant_id TEXT NOT NULL DEFAULT 'default',
+        transaction_id TEXT NOT NULL,
+        transaction_json TEXT NOT NULL,
+        draft_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, transaction_id)
+      );
+
+      INSERT INTO pro_workflow_entries (tenant_id, transaction_id, transaction_json, draft_json, updated_at)
+      SELECT 'default', transaction_id, transaction_json, draft_json, updated_at
+      FROM pro_workflow_entries_legacy;
+
+      DROP TABLE pro_workflow_entries_legacy;
+
+      CREATE INDEX IF NOT EXISTS idx_pro_workflow_entries_updated
+        ON pro_workflow_entries(tenant_id, updated_at DESC);
+    `);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS bank_transactions (

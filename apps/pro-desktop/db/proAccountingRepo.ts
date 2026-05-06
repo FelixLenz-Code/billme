@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
+import type { TenantScope } from '@billme/server-core';
 import { appendAuditLog } from './audit';
 import { listAccountSuggestionRules } from './accountSuggestionRulesRepo';
 import {
@@ -8,6 +9,7 @@ import {
   type AccountSuggestionLayer,
 } from '../services/accountSuggestionPipeline';
 import { seedAccountKeywords } from '../services/accountKeywordSeed';
+import { getTenantId } from '../tenantScope';
 import {
   ensureTaxCaseSeedData,
   getTaxCaseByKey,
@@ -146,8 +148,6 @@ export interface DatevExportResult {
   toDate?: string;
   createdAt: string;
 }
-
-const DEFAULT_TENANT = 'default';
 
 const round2 = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -319,10 +319,13 @@ const defaultDraftFromBankTx = (
   };
 };
 
-const parseDraftRow = (row: { draft_json: string; updated_at: string }): BookingDraftEntity => {
+const parseDraftRow = (
+  row: { draft_json: string; updated_at: string },
+  tenantId: string,
+): BookingDraftEntity => {
   const draft = safeJsonParse<BookingDraftEntity>(row.draft_json, {
     id: '',
-    tenantId: DEFAULT_TENANT,
+    tenantId,
     transactionId: '',
     workflowStatus: 'imported',
     bookingText: '',
@@ -677,11 +680,12 @@ const resolveBankLedgerAccountForTransaction = (
 const buildSuggestionsByTransaction = (
   db: Database.Database,
   items: ProBankTransaction[],
-  tenantId: string,
+  scope: TenantScope,
 ): Map<string, ReturnType<typeof suggestAccountForTransaction>> => {
   if (items.length === 0) return new Map();
+  const tenantId = getTenantId(scope);
   const chart = getActiveChart(db);
-  const rules = listAccountSuggestionRules(db, { chart, activeOnly: true }, tenantId);
+  const rules = listAccountSuggestionRules(db, { chart, activeOnly: true }, scope);
   const ctx = buildAccountSuggestionContext(db, { chart, rules, tenantId });
   const out = new Map<string, ReturnType<typeof suggestAccountForTransaction>>();
   for (const item of items) {
@@ -697,7 +701,8 @@ const buildSuggestionsByTransaction = (
   return out;
 };
 
-export const listBankTransactions = (db: Database.Database, tenantId = DEFAULT_TENANT): ProBankTransaction[] => {
+export const listBankTransactions = (db: Database.Database, scope: TenantScope): ProBankTransaction[] => {
+  const tenantId = getTenantId(scope);
   const rows = db
     .prepare(
       `
@@ -721,7 +726,7 @@ export const listBankTransactions = (db: Database.Database, tenantId = DEFAULT_T
   }>;
 
   const items = rows.map(toBankTransaction);
-  const suggestionsByTx = buildSuggestionsByTransaction(db, items, tenantId);
+  const suggestionsByTx = buildSuggestionsByTransaction(db, items, scope);
 
   return items.map((item) => {
     const suggestion = suggestionsByTx.get(item.id);
@@ -738,8 +743,9 @@ export const listBankTransactions = (db: Database.Database, tenantId = DEFAULT_T
 export const getDraftByTransactionId = (
   db: Database.Database,
   transactionId: string,
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): BookingDraftEntity | null => {
+  const tenantId = getTenantId(scope);
   const row = db
     .prepare(
       `
@@ -751,7 +757,7 @@ export const getDraftByTransactionId = (
     .get(tenantId, transactionId) as { draft_json: string; updated_at: string } | undefined;
 
   if (row) {
-    return parseDraftRow(row);
+    return parseDraftRow(row, tenantId);
   }
 
   const txRow = db
@@ -780,17 +786,18 @@ export const getDraftByTransactionId = (
   if (!txRow) return null;
 
   const tx = toBankTransaction(txRow);
-  const suggestion = buildSuggestionsByTransaction(db, [tx], tenantId).get(tx.id);
+  const suggestion = buildSuggestionsByTransaction(db, [tx], scope).get(tx.id);
   const bankLedgerAccount = resolveBankLedgerAccountForTransaction(db, tx);
   const draft = defaultDraftFromBankTx(tx, suggestion?.accountNumber, bankLedgerAccount);
-  return saveDraft(db, draft, tenantId);
+  return saveDraft(db, draft, scope);
 };
 
 export const saveDraft = (
   db: Database.Database,
   draft: BookingDraftEntity,
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): BookingDraftEntity => {
+  const tenantId = getTenantId(scope);
   const now = new Date().toISOString();
   const chart = getActiveChart(db);
   const normalized: BookingDraftEntity = {
@@ -853,9 +860,10 @@ export const dispatchDraftAction = (
     action: 'save_draft' | 'submit_for_review' | 'approve' | 'reject' | 'post' | 'reverse' | 'create_correction' | 'request_receipt';
     rejectReason?: string;
   },
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): BookingDraftEntity => {
-  const draft = getDraftByTransactionId(db, args.transactionId, tenantId);
+  const tenantId = getTenantId(scope);
+  const draft = getDraftByTransactionId(db, args.transactionId, scope);
   if (!draft) {
     throw new Error('Draft not found');
   }
@@ -900,14 +908,15 @@ export const dispatchDraftAction = (
       break;
   }
 
-  return saveDraft(db, next, tenantId);
+  return saveDraft(db, next, scope);
 };
 
 export const validateTaxCompliance = (
   db: Database.Database,
   args: { draftId?: string; transactionId?: string },
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): { ok: boolean; issues: DraftValidationIssue[] } => {
+  const tenantId = getTenantId(scope);
   let draft: BookingDraftEntity | null = null;
   if (args.draftId) {
     const row = db
@@ -916,13 +925,13 @@ export const validateTaxCompliance = (
     if (!row) throw new Error('Draft not found');
     draft = safeJsonParse<BookingDraftEntity>(row.draft_json, null as never);
   } else if (args.transactionId) {
-    draft = getDraftByTransactionId(db, args.transactionId, tenantId);
+    draft = getDraftByTransactionId(db, args.transactionId, scope);
   } else {
     throw new Error('draftId or transactionId is required');
   }
 
   if (!draft) throw new Error('Draft not found');
-  const normalized = saveDraft(db, draft, tenantId);
+  const normalized = saveDraft(db, draft, scope);
   const blocking = normalized.validationIssues.some((issue) => issue.blocking);
   return { ok: !blocking, issues: normalized.validationIssues };
 };
@@ -974,8 +983,9 @@ export const postDraft = (
   db: Database.Database,
   draftId: string,
   options: { postingDate?: string } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): { entry: JournalEntryEntity; issues: DraftValidationIssue[] } => {
+  const tenantId = getTenantId(scope);
   const row = db
     .prepare('SELECT draft_json FROM booking_drafts WHERE tenant_id = ? AND id = ?')
     .get(tenantId, draftId) as { draft_json: string } | undefined;
@@ -997,7 +1007,7 @@ export const postDraft = (
     period,
     fiscalYear,
     workflowStatus: 'approved',
-  }, tenantId);
+  }, scope);
 
   const blockingIssues = validated.validationIssues.filter((issue) => issue.blocking);
   if (!isOpenOrSoftLocked(periodStatus) || blockingIssues.length > 0) {
@@ -1240,8 +1250,9 @@ export const reverseJournalEntry = (
   db: Database.Database,
   entryId: string,
   reason: string,
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): { ok: true; reversalEntryId: string } => {
+  const tenantId = getTenantId(scope);
   const entry = db
     .prepare(
       `
@@ -1488,8 +1499,9 @@ export const reverseJournalEntry = (
 export const listJournalEntries = (
   db: Database.Database,
   args: { from?: string; to?: string; limit?: number; offset?: number } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): JournalEntryEntity[] => {
+  const tenantId = getTenantId(scope);
   const where: string[] = ['tenant_id = @tenantId'];
   const params: Record<string, unknown> = { tenantId };
 
@@ -1611,8 +1623,9 @@ export const listJournalEntries = (
 export const getLedgerBalances = (
   db: Database.Database,
   args: { asOfDate?: string } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): LedgerBalanceRow[] => {
+  const tenantId = getTenantId(scope);
   const rows = db
     .prepare(
       `
@@ -1651,13 +1664,14 @@ export const getLedgerBalances = (
 export const getSusaReport = (
   db: Database.Database,
   args: { asOfDate?: string } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): {
   asOfDate: string;
   rows: LedgerBalanceRow[];
   totals: { debit: number; credit: number; balance: number };
 } => {
-  const rows = getLedgerBalances(db, args, tenantId);
+  const tenantId = getTenantId(scope);
+  const rows = getLedgerBalances(db, args, scope);
   const totals = rows.reduce(
     (acc, row) => {
       acc.debit += row.debitTurnover;
@@ -1763,13 +1777,14 @@ const ensureDefaultMappings = (db: Database.Database, tenantId: string): void =>
 export const getGuvReport = (
   db: Database.Database,
   args: { from?: string; to?: string } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): {
   from?: string;
   to?: string;
   rows: Array<{ positionKey: string; positionLabel: string; amount: number }>;
   netResult: number;
 } => {
+  const tenantId = getTenantId(scope);
   ensureDefaultMappings(db, tenantId);
 
   const rows = db
@@ -1822,13 +1837,14 @@ export const getGuvReport = (
 export const getBilanzReport = (
   db: Database.Database,
   args: { asOfDate?: string } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): {
   asOfDate: string;
   assets: Array<{ accountNumber: string; amount: number }>;
   liabilities: Array<{ accountNumber: string; amount: number }>;
   totals: { assets: number; liabilities: number; delta: number };
 } => {
+  const tenantId = getTenantId(scope);
   ensureDefaultMappings(db, tenantId);
 
   const rows = db
@@ -1878,7 +1894,8 @@ export const getBilanzReport = (
   };
 };
 
-export const listDatevExports = (db: Database.Database, tenantId = DEFAULT_TENANT): DatevExportResult[] => {
+export const listDatevExports = (db: Database.Database, scope: TenantScope): DatevExportResult[] => {
+  const tenantId = getTenantId(scope);
   const rows = db
     .prepare(
       `
@@ -1910,8 +1927,9 @@ export const listDatevExports = (db: Database.Database, tenantId = DEFAULT_TENAN
 export const insertDatevExport = (
   db: Database.Database,
   args: { filePath: string; recordCount: number; fromDate?: string; toDate?: string },
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): DatevExportResult => {
+  const tenantId = getTenantId(scope);
   const id = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(
@@ -1948,7 +1966,7 @@ export const insertDatevExport = (
 
 export const getAccountingHealth = (
   db: Database.Database,
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): {
   draftCount: number;
   postedCount: number;
@@ -1957,6 +1975,7 @@ export const getAccountingHealth = (
   unmappedAccountCount: number;
   lastDatevExportAt?: string;
 } => {
+  const tenantId = getTenantId(scope);
   const draftCount = (db
     .prepare('SELECT COUNT(*) as c FROM booking_drafts WHERE tenant_id = ?')
     .get(tenantId) as { c: number }).c;
@@ -1999,7 +2018,7 @@ export const getAccountingHealth = (
 export const getVatSummary = (
   db: Database.Database,
   args: { from?: string; to?: string } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): {
   from?: string;
   to?: string;
@@ -2011,6 +2030,7 @@ export const getVatSummary = (
     lineCount: number;
   }>;
 } => {
+  const tenantId = getTenantId(scope);
   const rows = db
     .prepare(
       `
@@ -2060,7 +2080,7 @@ export const getVatSummary = (
 export const buildDatevRows = (
   db: Database.Database,
   args: { from?: string; to?: string } = {},
-  tenantId = DEFAULT_TENANT,
+  scope: TenantScope,
 ): Array<{
   date: string;
   belegfeld1: string;
@@ -2071,6 +2091,7 @@ export const buildDatevRows = (
   buSchluessel?: string;
   umsatz: number;
 }> => {
+  const tenantId = getTenantId(scope);
   const params = {
     tenantId,
     from: args.from ?? null,
@@ -2122,7 +2143,7 @@ export const buildDatevRows = (
   }
 
   // Fallback for legacy entries without persisted posting pairs.
-  return listJournalEntries(db, { from: args.from, to: args.to, limit: 100_000, offset: 0 }, tenantId)
+  return listJournalEntries(db, { from: args.from, to: args.to, limit: 100_000, offset: 0 }, scope)
     .filter((entry) => entry.status === 'posted')
     .flatMap((entry) => {
       const debitLines = entry.lines.filter((line) => Number(line.debitAmount || 0) > 0);
@@ -2140,7 +2161,8 @@ export const buildDatevRows = (
     });
 };
 
-export const ensureProAccountingSeedData = (db: Database.Database, tenantId = DEFAULT_TENANT): void => {
+export const ensureProAccountingSeedData = (db: Database.Database, scope: TenantScope): void => {
+  const tenantId = getTenantId(scope);
   ensureTaxCaseSeedData(db);
   const now = new Date();
   const thisPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -2155,12 +2177,12 @@ export const ensureProAccountingSeedData = (db: Database.Database, tenantId = DE
     .get(tenantId) as { c: number }).c;
 
   if (bankCount === 0) {
-    db.exec(
+    db.prepare(
       `
       INSERT INTO bank_transactions (id, tenant_id, account_id, date, amount, type, counterparty, purpose, linked_invoice_id, status, source_transaction_id, created_at, updated_at)
       SELECT
         t.id,
-        '${DEFAULT_TENANT}',
+        ?,
         t.account_id,
         t.date,
         t.amount,
@@ -2174,9 +2196,9 @@ export const ensureProAccountingSeedData = (db: Database.Database, tenantId = DE
         datetime('now')
       FROM transactions t
       `,
-    );
+    ).run(tenantId);
   }
 
-  seedAccountKeywords(db, tenantId);
+  seedAccountKeywords(db, scope);
   ensureDefaultMappings(db, tenantId);
 };

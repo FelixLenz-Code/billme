@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const invoices = sqliteTable('invoices', {
   id: text('id').primaryKey(),
@@ -222,13 +222,15 @@ export const ledgerAccounts = sqliteTable(
 export const proWorkflowEntries = sqliteTable(
   'pro_workflow_entries',
   {
-    transactionId: text('transaction_id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default('default'),
+    transactionId: text('transaction_id').notNull(),
     transactionJson: text('transaction_json').notNull(),
     draftJson: text('draft_json').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
   (t) => ({
-    byUpdated: index('idx_pro_workflow_entries_updated').on(t.updatedAt),
+    pk: primaryKey({ columns: [t.tenantId, t.transactionId] }),
+    byUpdated: index('idx_pro_workflow_entries_updated').on(t.tenantId, t.updatedAt),
   }),
 );
 

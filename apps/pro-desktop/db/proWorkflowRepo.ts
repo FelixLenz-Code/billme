@@ -1,22 +1,20 @@
 import type Database from 'better-sqlite3';
+import type { ProWorkflowEntry } from '@billme/accounting-shared';
+import type { TenantScope } from '@billme/server-core';
+import { getTenantId } from '../tenantScope';
 
-export interface ProWorkflowEntry {
-  transactionId: string;
-  transactionJson: string;
-  draftJson: string;
-  updatedAt: string;
-}
-
-export const listProWorkflowEntries = (db: Database.Database): ProWorkflowEntry[] => {
+export const listProWorkflowEntries = (db: Database.Database, scope: TenantScope): ProWorkflowEntry[] => {
+  const tenantId = getTenantId(scope);
   const rows = db
     .prepare(
       `
       SELECT transaction_id, transaction_json, draft_json, updated_at
       FROM pro_workflow_entries
+      WHERE tenant_id = ?
       ORDER BY updated_at DESC, transaction_id ASC
     `,
     )
-    .all() as Array<{
+    .all(tenantId) as Array<{
     transaction_id: string;
     transaction_json: string;
     draft_json: string;
@@ -38,18 +36,21 @@ export const upsertProWorkflowEntry = (
     transactionJson: string;
     draftJson: string;
   },
+  scope: TenantScope,
 ): { ok: true } => {
+  const tenantId = getTenantId(scope);
   const now = new Date().toISOString();
   db.prepare(
     `
-      INSERT INTO pro_workflow_entries (transaction_id, transaction_json, draft_json, updated_at)
-      VALUES (@transactionId, @transactionJson, @draftJson, @updatedAt)
-      ON CONFLICT(transaction_id) DO UPDATE SET
+      INSERT INTO pro_workflow_entries (tenant_id, transaction_id, transaction_json, draft_json, updated_at)
+      VALUES (@tenantId, @transactionId, @transactionJson, @draftJson, @updatedAt)
+      ON CONFLICT(tenant_id, transaction_id) DO UPDATE SET
         transaction_json = excluded.transaction_json,
         draft_json = excluded.draft_json,
         updated_at = excluded.updated_at
     `,
   ).run({
+    tenantId,
     transactionId: args.transactionId,
     transactionJson: args.transactionJson,
     draftJson: args.draftJson,

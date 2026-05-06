@@ -1,37 +1,22 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
+import type {
+  AccountSuggestionRule,
+  AccountSuggestionRuleField,
+  AccountSuggestionRuleFlowType,
+  AccountSuggestionRuleOperator,
+  UpsertAccountSuggestionRuleInput,
+} from '@billme/accounting-shared';
+import type { TenantScope } from '@billme/server-core';
+import { getTenantId } from '../tenantScope';
 
-export type AccountSuggestionRuleField = 'counterparty' | 'purpose' | 'any';
-export type AccountSuggestionRuleOperator = 'contains' | 'equals' | 'startsWith';
-export type AccountSuggestionRuleFlowType = 'income' | 'expense' | 'any';
-
-export interface AccountSuggestionRule {
-  id: string;
-  tenantId: string;
-  chart: 'SKR03' | 'SKR04';
-  priority: number;
-  field: AccountSuggestionRuleField;
-  operator: AccountSuggestionRuleOperator;
-  value: string;
-  targetAccountNumber: string;
-  flowType: AccountSuggestionRuleFlowType;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface UpsertAccountSuggestionRuleInput {
-  id?: string;
-  tenantId?: string;
-  chart: 'SKR03' | 'SKR04';
-  priority: number;
-  field: AccountSuggestionRuleField;
-  operator: AccountSuggestionRuleOperator;
-  value: string;
-  targetAccountNumber: string;
-  flowType?: AccountSuggestionRuleFlowType;
-  active?: boolean;
-}
+export type {
+  AccountSuggestionRule,
+  AccountSuggestionRuleField,
+  AccountSuggestionRuleFlowType,
+  AccountSuggestionRuleOperator,
+  UpsertAccountSuggestionRuleInput,
+} from '@billme/accounting-shared';
 
 interface RuleRow {
   id: string;
@@ -66,8 +51,9 @@ const mapRow = (row: RuleRow): AccountSuggestionRule => ({
 export const listAccountSuggestionRules = (
   db: Database.Database,
   args: { chart?: 'SKR03' | 'SKR04'; activeOnly?: boolean } = {},
-  tenantId = 'default',
+  scope: TenantScope,
 ): AccountSuggestionRule[] => {
+  const tenantId = getTenantId(scope);
   const where = ['tenant_id = @tenantId'];
   const params: Record<string, unknown> = { tenantId };
 
@@ -94,10 +80,11 @@ export const listAccountSuggestionRules = (
 export const upsertAccountSuggestionRule = (
   db: Database.Database,
   input: UpsertAccountSuggestionRuleInput,
+  scope: TenantScope,
 ): AccountSuggestionRule => {
   const now = new Date().toISOString();
   const id = input.id ?? randomUUID();
-  const tenantId = input.tenantId ?? 'default';
+  const tenantId = input.tenantId ?? getTenantId(scope);
   const active = input.active !== false;
   const flowType = input.flowType ?? 'any';
 
@@ -148,6 +135,6 @@ export const upsertAccountSuggestionRule = (
   return mapRow(row);
 };
 
-export const deleteAccountSuggestionRule = (db: Database.Database, id: string): void => {
-  db.prepare('DELETE FROM account_suggestion_rules WHERE id = ?').run(id);
+export const deleteAccountSuggestionRule = (db: Database.Database, id: string, scope: TenantScope): void => {
+  db.prepare('DELETE FROM account_suggestion_rules WHERE tenant_id = ? AND id = ?').run(getTenantId(scope), id);
 };

@@ -1,35 +1,15 @@
 import type Database from 'better-sqlite3';
+import type { LedgerAccount, LedgerAccountStats, LedgerChart, ListLedgerAccountsArgs } from '@billme/accounting-shared';
+import type { TenantScope } from '@billme/server-core';
+import { getTenantId } from '../tenantScope';
 
-export type LedgerChart = 'SKR03' | 'SKR04';
-
-export interface LedgerAccount {
-  id: string;
-  chart: LedgerChart;
-  accountNumber: string;
-  name: string;
-  keywords?: string[];
-  source: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ListLedgerAccountsArgs {
-  chart?: LedgerChart;
-  search?: string;
-  limit?: number;
-  offset?: number;
-}
+export type { LedgerAccount, LedgerAccountStats, ListLedgerAccountsArgs, LedgerChart } from '@billme/accounting-shared';
 
 export interface UpsertLedgerAccount {
   chart: LedgerChart;
   accountNumber: string;
   name: string;
   source?: string;
-}
-
-export interface LedgerAccountStats {
-  total: number;
-  byChart: Record<LedgerChart, number>;
 }
 
 const toLedgerAccount = (row: {
@@ -57,9 +37,14 @@ const toLedgerAccount = (row: {
   updatedAt: row.updated_at,
 });
 
-export const listLedgerAccounts = (db: Database.Database, args: ListLedgerAccountsArgs = {}): LedgerAccount[] => {
+export const listLedgerAccounts = (
+  db: Database.Database,
+  args: ListLedgerAccountsArgs = {},
+  scope: TenantScope,
+): LedgerAccount[] => {
+  const tenantId = getTenantId(scope);
   const where: string[] = [];
-  const params: Record<string, unknown> = {};
+  const params: Record<string, unknown> = { tenantId };
 
   if (args.chart) {
     where.push('chart = @chart');
@@ -88,7 +73,7 @@ export const listLedgerAccounts = (db: Database.Database, args: ListLedgerAccoun
         (
           SELECT GROUP_CONCAT(ak.keyword, '|')
           FROM account_keywords ak
-          WHERE ak.tenant_id = 'default'
+          WHERE ak.tenant_id = @tenantId
             AND ak.chart = la.chart
             AND ak.account_number = la.account_number
             AND ak.active = 1

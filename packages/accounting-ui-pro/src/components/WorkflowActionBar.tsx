@@ -20,7 +20,6 @@ interface WorkflowActionBarProps {
 }
 
 export default function WorkflowActionBar({
-  draft,
   allowedActions,
   onAction,
   isBusy,
@@ -56,4 +55,3 @@ export default function WorkflowActionBar({
     </div>
   );
 }
-

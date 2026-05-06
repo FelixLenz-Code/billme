@@ -1,6 +1,8 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import { normalizeGermanText } from '@billme/finance-intelligence';
+import type { TenantScope } from '@billme/server-core';
+import { getTenantId } from '../tenantScope';
 
 type LedgerAccount = {
   chart: 'SKR03' | 'SKR04';
@@ -122,7 +124,8 @@ const insertKeyword = (
   );
 };
 
-export const seedAccountKeywords = (db: Database.Database, tenantId = 'default'): void => {
+export const seedAccountKeywords = (db: Database.Database, scope: TenantScope): void => {
+  const tenantId = getTenantId(scope);
   const count = db
     .prepare('SELECT COUNT(*) as c FROM account_keywords WHERE tenant_id = ?')
     .get(tenantId) as { c: number };

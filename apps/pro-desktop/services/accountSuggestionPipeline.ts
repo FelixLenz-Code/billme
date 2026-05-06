@@ -6,7 +6,7 @@ import {
   trainNaiveBayes as trainSharedNaiveBayes,
   type NaiveBayesModel as SharedNaiveBayesModel,
 } from '@billme/finance-intelligence';
-import type { AccountSuggestionRule } from '../db/accountSuggestionRulesRepo';
+import type { AccountSuggestionRule } from '@billme/accounting-shared';
 
 type FlowType = 'income' | 'expense';
 

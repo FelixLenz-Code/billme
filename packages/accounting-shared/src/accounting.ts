@@ -29,6 +29,15 @@ export interface JournalLine {
   debitAmount: number;
   creditAmount: number;
   taxCode?: string;
+  taxCaseKey?: TaxCaseKey;
+  taxRate?: number;
+  netAmount?: number;
+  taxAmount?: number;
+  grossAmount?: number;
+  countryCode?: string;
+  counterpartyVatId?: string;
+  evidenceType?: string;
+  evidenceReference?: string;
   costCenter?: string;
   memo?: string;
 }
@@ -66,6 +75,15 @@ export interface BookingDraftLineEntity {
   debitAmount: number;
   creditAmount: number;
   taxCode?: string;
+  taxCaseKey?: TaxCaseKey;
+  taxRate?: number;
+  netAmount?: number;
+  taxAmount?: number;
+  grossAmount?: number;
+  countryCode?: string;
+  counterpartyVatId?: string;
+  evidenceType?: string;
+  evidenceReference?: string;
   costCenter?: string;
   memo?: string;
 }
@@ -92,6 +110,15 @@ export interface JournalLineEntity {
   debitAmount: number;
   creditAmount: number;
   taxCode?: string;
+  taxCaseKey?: TaxCaseKey;
+  taxRate?: number;
+  netAmount?: number;
+  taxAmount?: number;
+  grossAmount?: number;
+  countryCode?: string;
+  counterpartyVatId?: string;
+  evidenceType?: string;
+  evidenceReference?: string;
   costCenter?: string;
   memo?: string;
 }
@@ -132,4 +159,128 @@ export interface DatevExportResult {
   fromDate?: string;
   toDate?: string;
   createdAt: string;
+}
+
+export interface ProWorkflowEntry {
+  transactionId: string;
+  transactionJson: string;
+  draftJson: string;
+  updatedAt: string;
+}
+
+export interface ProBankTransaction {
+  id: string;
+  tenantId: string;
+  accountId: string;
+  date: string;
+  amount: number;
+  type: 'income' | 'expense';
+  counterparty: string;
+  purpose: string;
+  status: 'pending' | 'booked';
+  linkedInvoiceId?: string;
+  suggestedAccountNumber?: string;
+  suggestionReason?: string;
+  suggestionLayer?: 'rule' | 'counterparty' | 'bayes' | 'keyword' | 'fallback';
+  suggestionConfidence?: number;
+}
+
+export type LedgerChart = 'SKR03' | 'SKR04';
+
+export interface LedgerAccount {
+  id: string;
+  chart: LedgerChart;
+  accountNumber: string;
+  name: string;
+  keywords?: string[];
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListLedgerAccountsArgs {
+  chart?: LedgerChart;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface LedgerAccountStats {
+  total: number;
+  byChart: Record<LedgerChart, number>;
+}
+
+export type TaxMechanism = 'standard_vat' | 'reverse_charge' | 'zero_rate' | 'exempt';
+
+export type TaxCaseKey =
+  | 'DE_STD_19'
+  | 'DE_STD_7'
+  | 'DE_ZERO_EXEMPT'
+  | 'DE_KU19'
+  | 'DE_RC_13B_DOMESTIC'
+  | 'EU_B2C_OSS'
+  | 'DE_MARGIN_25A'
+  | 'DE_BAUABZUG_48'
+  | 'DE_TRIANGULAR_25B'
+  | 'EU_B2B_SERVICE_RC'
+  | 'EU_IGL_GOODS_0'
+  | 'EU_IGE_GOODS_RC'
+  | 'NON_EU_EXPORT_0'
+  | 'NON_EU_SERVICE_RC';
+
+export interface TaxCaseDefinition {
+  key: TaxCaseKey;
+  label: string;
+  mechanism: TaxMechanism;
+  defaultRate: number;
+  requiresCounterpartyVatId: boolean;
+  requiresCountry: boolean;
+  requiresEvidence: boolean;
+  active: boolean;
+}
+
+export type TaxMappingRole = 'output_tax' | 'input_tax' | 'datev_bu';
+
+export interface TaxCaseAccountMapping {
+  id: string;
+  chart: LedgerChart;
+  taxCaseKey: TaxCaseKey;
+  role: TaxMappingRole;
+  accountNumber: string;
+  datevBuKey?: string;
+  validFrom?: string;
+  validTo?: string;
+  updatedAt: string;
+}
+
+export type AccountSuggestionRuleField = 'counterparty' | 'purpose' | 'any';
+export type AccountSuggestionRuleOperator = 'contains' | 'equals' | 'startsWith';
+export type AccountSuggestionRuleFlowType = 'income' | 'expense' | 'any';
+
+export interface AccountSuggestionRule {
+  id: string;
+  tenantId: string;
+  chart: LedgerChart;
+  priority: number;
+  field: AccountSuggestionRuleField;
+  operator: AccountSuggestionRuleOperator;
+  value: string;
+  targetAccountNumber: string;
+  flowType: AccountSuggestionRuleFlowType;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertAccountSuggestionRuleInput {
+  id?: string;
+  tenantId?: string;
+  chart: LedgerChart;
+  priority: number;
+  field: AccountSuggestionRuleField;
+  operator: AccountSuggestionRuleOperator;
+  value: string;
+  targetAccountNumber: string;
+  flowType?: AccountSuggestionRuleFlowType;
+  active?: boolean;
 }

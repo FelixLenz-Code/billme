@@ -37,6 +37,7 @@ import { logger } from '../utils/logger';
 import { PRODUCT_PROFILE } from '../productProfile';
 import { ensureSkrChartsImported } from '../services/skrImport';
 import { ensureProAccountingSeedData } from '../db/proAccountingRepo';
+import { resolveRuntimeProTenantScope } from '../tenantScope';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL || process.env.ELECTRON_RENDERER_URL);
@@ -271,7 +272,7 @@ app.whenReady().then(async () => {
 
   ensureSkrChartsImported(db, { preferredSource: 'sqlite' });
   ensureAccountDefaultSkrMappings(db);
-  ensureProAccountingSeedData(db);
+  ensureProAccountingSeedData(db, resolveRuntimeProTenantScope());
 
   await createWindow();
 

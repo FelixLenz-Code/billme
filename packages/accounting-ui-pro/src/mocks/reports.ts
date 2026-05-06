@@ -3,7 +3,6 @@ import {
   GuvReport,
   ReportDrilldownEntry,
   SusaReport,
-  SusaRow,
 } from '../domain/reportTypes';
 
 type BaseSusaRow = [

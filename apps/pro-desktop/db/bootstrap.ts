@@ -190,14 +190,16 @@ CREATE INDEX IF NOT EXISTS idx_ledger_accounts_name
   ON ledger_accounts(name);
 
 CREATE TABLE IF NOT EXISTS pro_workflow_entries (
-  transaction_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'default',
+  transaction_id TEXT NOT NULL,
   transaction_json TEXT NOT NULL,
   draft_json TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, transaction_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_pro_workflow_entries_updated
-  ON pro_workflow_entries(updated_at DESC);
+  ON pro_workflow_entries(tenant_id, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS bank_transactions (
   id TEXT PRIMARY KEY,

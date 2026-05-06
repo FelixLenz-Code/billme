@@ -7,11 +7,11 @@ import { logger } from '../utils/logger';
 import { closeDb, getDb, getDbPath, initDb } from '../db/connection';
 import { createInvoiceFromOffer, deleteInvoice, listInvoices, upsertInvoice } from '../db/invoicesRepo';
 import {
-  applyOfferDecision,
   deleteOffer,
   getOffer,
   listOffers,
-  markOfferPublished,
+  publishOfferToPortal,
+  syncPublishedOfferDecisionFromPortal,
   upsertOffer,
 } from '../db/offersRepo';
 import { deleteClient, getClient, listClients, upsertClient } from '../db/clientsRepo';
@@ -71,41 +71,24 @@ import { getInvoiceDunningStatus } from '../services/dunningService';
 import { buildEurCsv, getEurReport, listEurItems, upsertEurItemClassification } from '../services/eurReport';
 import { listAllEurRules, upsertEurRule, deleteEurRule } from '../db/eurRulesRepo';
 import {
-  deleteAccountSuggestionRule,
-  listAccountSuggestionRules,
-  upsertAccountSuggestionRule,
-} from '../db/accountSuggestionRulesRepo';
+  bindProAccountingCatalogScope,
+  bindProAccountingScope,
+  bindProWorkflowScope,
+  createProAccountingCatalogService,
+  createProAccountingService,
+  createProWorkflowService,
+} from '@billme/accounting-engine';
 import { PRODUCT_PROFILE } from '../productProfile';
-import { getLedgerAccountStats, listLedgerAccounts } from '../db/ledgerAccountsRepo';
 import { importSkrCharts } from '../services/skrImport';
-import { listProWorkflowEntries, upsertProWorkflowEntry } from '../db/proWorkflowRepo';
 import {
-  buildDatevRows,
-  dispatchDraftAction,
-  getAccountingHealth,
-  getBilanzReport,
-  getDraftByTransactionId,
-  getGuvReport,
-  getLedgerBalances,
-  getSusaReport,
-  getVatSummary,
-  insertDatevExport,
-  listBankTransactions,
-  listDatevExports,
-  listJournalEntries,
-  postDraft,
-  reverseJournalEntry,
-  saveDraft,
-  validateTaxCompliance,
-} from '../db/proAccountingRepo';
+  createSqliteProAccountingCatalogRepository,
+  createSqliteProAccountingRepository,
+  createSqliteProWorkflowRepository,
+} from '../db/proAccountingPorts';
 import { buildDatevBuchungsstapelCsv } from '../services/datevExport';
 import { buildTaxAuditExportPackage } from '../services/auditExportPackage';
 import { seedAccountKeywords } from '../services/accountKeywordSeed';
-import {
-  listTaxCases,
-  listTaxCaseAccountMappings,
-  upsertTaxCaseAccountMapping,
-} from '../db/taxCasesRepo';
+import { resolveRuntimeProTenantScope } from '../tenantScope';
 
 const computeGrossFromItems = (doc: Invoice, settings: AppSettings): number => {
   const net = (doc.items ?? []).reduce((acc, it) => acc + (Number(it.total) || 0), 0);
@@ -167,6 +150,19 @@ export const registerIpcHandlers = (
   const requireDb = deps.requireDb;
   const getUserDataPath = deps.getUserDataPath;
   const getMainWindow = deps.getMainWindow;
+  const getProScope = () => resolveRuntimeProTenantScope();
+  const getProAccountingService = () =>
+    bindProAccountingScope(
+      createProAccountingService(createSqliteProAccountingRepository(requireDb())),
+      getProScope(),
+    );
+  const getProAccountingCatalogService = () =>
+    bindProAccountingCatalogScope(
+      createProAccountingCatalogService(createSqliteProAccountingCatalogRepository(requireDb())),
+      getProScope(),
+    );
+  const getProWorkflowService = () =>
+    bindProWorkflowScope(createProWorkflowService(createSqliteProWorkflowRepository(requireDb())), getProScope());
 
   register(ipcMain, 'invoices:list', () => {
     const db = requireDb();
@@ -683,57 +679,52 @@ export const registerIpcHandlers = (
     const baseUrl = settings?.portal?.baseUrl?.trim();
     if (!baseUrl) throw new Error('Portal baseUrl not configured (Settings → Portal)');
 
-    const apiKey = await secrets.get('portal.apiKey');
-    const token = crypto.randomBytes(24).toString('base64url');
+    const res = await publishOfferToPortal(db, {
+      offerId,
+      expiresAt,
+      portalGateway: {
+        publishOffer: async ({ expiresAt: publishExpiresAt }) => {
+          const apiKey = await secrets.get('portal.apiKey');
+          const token = crypto.randomBytes(24).toString('base64url');
+          const pdf = await exportPdf({
+            kind: 'offer',
+            id: offerId,
+            suggestedName: `${offer.number || 'offer'}-${offer.client || offerId}`,
+            userDataPath: getUserDataPath(),
+          });
 
-    const pdf = await exportPdf({
-      kind: 'offer',
-      id: offerId,
-      suggestedName: `${offer.number || 'offer'}-${offer.client || offerId}`,
-      userDataPath: getUserDataPath(),
+          return portalClient.publishOffer({
+            baseUrl,
+            apiKey,
+            token,
+            snapshot: offer,
+            customerRef: deriveCustomerRef(offer),
+            customerLabel: offer.client,
+            expiresAt: publishExpiresAt ?? offer.dueDate,
+            pdfBytes: pdf.bytes,
+          });
+        },
+      },
     });
 
-    const res = await portalClient.publishOffer({
-      baseUrl,
-      apiKey,
-      token,
-      snapshot: offer,
-      customerRef: deriveCustomerRef(offer),
-      customerLabel: offer.client,
-      expiresAt: expiresAt ?? offer.dueDate,
-      pdfBytes: pdf.bytes,
-    });
-
-    markOfferPublished(db, offerId, { token, publishedAt: new Date().toISOString() });
-    return res;
+    return { ok: true, token: res.token, publicUrl: res.publicUrl };
   });
 
   register(ipcMain, 'portal:syncOfferStatus', async ({ offerId }) => {
     const db = requireDb();
-    const offer = getOffer(db, offerId);
-    if (!offer) throw new Error('Offer not found');
-    if (!offer.shareToken) throw new Error('Offer is not published');
 
     const settings = getSettings(db);
     const baseUrl = settings?.portal?.baseUrl?.trim();
     if (!baseUrl) throw new Error('Portal baseUrl not configured (Settings → Portal)');
 
-    const status = await portalClient.getOfferStatus(baseUrl, offer.shareToken);
-    const decision = status.decision ?? null;
-    if (!decision) return { ok: true, decision: null, updated: false };
-
-    const beforeAcceptedAt = offer.acceptedAt;
-    if (beforeAcceptedAt) return { ok: true, decision, updated: false };
-
-    applyOfferDecision(db, offerId, {
-      decidedAt: decision.decidedAt,
-      decision: decision.decision,
-      acceptedName: decision.acceptedName,
-      acceptedEmail: decision.acceptedEmail,
-      decisionTextVersion: decision.decisionTextVersion,
+    const result = await syncPublishedOfferDecisionFromPortal(db, {
+      offerId,
+      portalGateway: {
+        getOfferStatus: (shareToken) => portalClient.getOfferStatus(baseUrl, shareToken),
+      },
     });
 
-    return { ok: true, decision, updated: true };
+    return { ok: true, decision: result.decision, updated: result.updated };
   });
 
   register(ipcMain, 'portal:publishInvoice', async ({ invoiceId, expiresAt }) => {
@@ -1100,172 +1091,146 @@ export const registerIpcHandlers = (
     const db = requireDb();
     const result = importSkrCharts(db, args);
     if (result.total > 0) {
-      seedAccountKeywords(db);
+      seedAccountKeywords(db, getProScope());
     }
     return result;
   });
 
   register(ipcMain, 'pro:listLedgerAccounts', (args) => {
-    const db = requireDb();
-    return listLedgerAccounts(db, args);
+    return getProAccountingCatalogService().listLedgerAccounts(args);
   });
 
   register(ipcMain, 'pro:listTaxCases', ({ activeOnly }) => {
-    const db = requireDb();
-    return listTaxCases(db, { activeOnly });
+    return getProAccountingCatalogService().listTaxCases({ activeOnly });
   });
 
   register(ipcMain, 'pro:listTaxCaseAccountMappings', ({ chart, taxCaseKey }) => {
-    const db = requireDb();
-    return listTaxCaseAccountMappings(db, { chart, taxCaseKey });
+    return getProAccountingCatalogService().listTaxCaseAccountMappings({ chart, taxCaseKey });
   });
 
   register(ipcMain, 'pro:upsertTaxCaseAccountMapping', (args) => {
-    const db = requireDb();
-    return upsertTaxCaseAccountMapping(db, args);
+    return getProAccountingCatalogService().upsertTaxCaseAccountMapping(args);
   });
 
   register(ipcMain, 'pro:getLedgerStats', () => {
-    const db = requireDb();
-    return getLedgerAccountStats(db);
+    return getProAccountingCatalogService().getLedgerStats();
   });
 
   register(ipcMain, 'pro:listBankTransactions', () => {
-    const db = requireDb();
-    return listBankTransactions(db).map((tx) => ({
-      id: tx.id,
-      accountId: tx.accountId,
-      date: tx.date,
-      amount: tx.amount,
-      type: tx.type,
+    return getProAccountingService().listBankTransactions().then((rows) =>
+      rows.map((tx) => ({
+        id: tx.id,
+        accountId: tx.accountId,
+        date: tx.date,
+        amount: tx.amount,
+        type: tx.type,
       counterparty: tx.counterparty,
       purpose: tx.purpose,
       linkedInvoiceId: tx.linkedInvoiceId,
       status: tx.status,
       suggestedAccountNumber: tx.suggestedAccountNumber,
-      suggestionReason: tx.suggestionReason,
-      suggestionLayer: tx.suggestionLayer,
-      suggestionConfidence: tx.suggestionConfidence,
-    }));
+        suggestionReason: tx.suggestionReason,
+        suggestionLayer: tx.suggestionLayer,
+        suggestionConfidence: tx.suggestionConfidence,
+      })),
+    );
   });
 
   register(ipcMain, 'pro:listAccountSuggestionRules', ({ chart, activeOnly }) => {
-    const db = requireDb();
-    return listAccountSuggestionRules(db, { chart, activeOnly });
+    return getProAccountingCatalogService().listAccountSuggestionRules({ chart, activeOnly });
   });
 
   register(ipcMain, 'pro:upsertAccountSuggestionRule', (args) => {
-    const db = requireDb();
-    return upsertAccountSuggestionRule(db, args);
+    return getProAccountingCatalogService().upsertAccountSuggestionRule(args);
   });
 
   register(ipcMain, 'pro:deleteAccountSuggestionRule', ({ id }) => {
-    const db = requireDb();
-    deleteAccountSuggestionRule(db, id);
-    return { ok: true };
+    return getProAccountingCatalogService().deleteAccountSuggestionRule(id).then(() => ({ ok: true }));
   });
 
   register(ipcMain, 'pro:getDraftByTransactionId', ({ transactionId }) => {
-    const db = requireDb();
-    return getDraftByTransactionId(db, transactionId);
+    return getProAccountingService().getDraftByTransactionId(transactionId);
   });
 
   register(ipcMain, 'pro:saveDraft', ({ draft }) => {
-    const db = requireDb();
-    return saveDraft(db, draft);
+    return getProAccountingService().saveDraft(draft);
   });
 
   register(ipcMain, 'pro:dispatchDraftAction', ({ transactionId, action, rejectReason }) => {
-    const db = requireDb();
-    return dispatchDraftAction(db, { transactionId, action, rejectReason });
+    return getProAccountingService().dispatchDraftAction({ transactionId, action, rejectReason });
   });
 
   register(ipcMain, 'pro:postDraft', ({ draftId, postingDate, actorRole }) => {
     assertProRoleAllowed('pro:postDraft', actorRole, ['reviewer', 'accountant', 'admin']);
-    const db = requireDb();
-    return postDraft(db, draftId, { postingDate });
+    return getProAccountingService().postDraft(draftId, { postingDate });
   });
 
   register(ipcMain, 'pro:reverseJournalEntry', ({ entryId, reason, actorRole }) => {
     assertProRoleAllowed('pro:reverseJournalEntry', actorRole, ['accountant', 'admin']);
-    const db = requireDb();
-    return reverseJournalEntry(db, entryId, reason);
+    return getProAccountingService().reverseJournalEntry(entryId, reason);
   });
 
   register(ipcMain, 'pro:listJournalEntries', ({ from, to, limit, offset }) => {
-    const db = requireDb();
-    return listJournalEntries(db, { from, to, limit, offset });
+    return getProAccountingService().listJournalEntries({ from, to, limit, offset });
   });
 
   register(ipcMain, 'pro:getLedgerBalances', ({ asOfDate }) => {
-    const db = requireDb();
-    return getLedgerBalances(db, { asOfDate });
+    return getProAccountingService().getLedgerBalances({ asOfDate });
   });
 
   register(ipcMain, 'pro:getSusaReport', ({ asOfDate }) => {
-    const db = requireDb();
-    return getSusaReport(db, { asOfDate });
+    return getProAccountingService().getSusaReport({ asOfDate });
   });
 
   register(ipcMain, 'pro:getGuvReport', ({ from, to }) => {
-    const db = requireDb();
-    return getGuvReport(db, { from, to });
+    return getProAccountingService().getGuvReport({ from, to });
   });
 
   register(ipcMain, 'pro:getBilanzReport', ({ asOfDate }) => {
-    const db = requireDb();
-    return getBilanzReport(db, { asOfDate });
+    return getProAccountingService().getBilanzReport({ asOfDate });
   });
 
   register(ipcMain, 'pro:exportDatevBuchungsstapel', ({ from, to, actorRole }) => {
     assertProRoleAllowed('pro:exportDatevBuchungsstapel', actorRole, ['accountant', 'admin']);
-    const db = requireDb();
-    const rows = buildDatevRows(db, { from, to });
-    const userDataPath = getUserDataPath();
-    const exportDir = path.join(userDataPath, 'exports', 'datev');
-    fs.mkdirSync(exportDir, { recursive: true });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const exportPath = path.join(exportDir, `datev-buchungsstapel-${timestamp}.csv`);
-    const csvBuffer = buildDatevBuchungsstapelCsv(rows);
-    fs.writeFileSync(exportPath, csvBuffer);
-    return insertDatevExport(db, {
-      filePath: exportPath,
-      recordCount: rows.length,
-      fromDate: from,
-      toDate: to,
+    return getProAccountingService().buildDatevRows({ from, to }).then((rows) => {
+      const userDataPath = getUserDataPath();
+      const exportDir = path.join(userDataPath, 'exports', 'datev');
+      fs.mkdirSync(exportDir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const exportPath = path.join(exportDir, `datev-buchungsstapel-${timestamp}.csv`);
+      const csvBuffer = buildDatevBuchungsstapelCsv(rows);
+      fs.writeFileSync(exportPath, csvBuffer);
+      return getProAccountingService().insertDatevExport({
+        filePath: exportPath,
+        recordCount: rows.length,
+        fromDate: from,
+        toDate: to,
+      });
     });
   });
 
   register(ipcMain, 'pro:listDatevExports', ({ limit }) => {
-    const db = requireDb();
-    const rows = listDatevExports(db);
-    if (!limit) return rows;
-    return rows.slice(0, limit);
+    return getProAccountingService().listDatevExports().then((rows) => (limit ? rows.slice(0, limit) : rows));
   });
 
   register(ipcMain, 'pro:getAccountingHealth', () => {
-    const db = requireDb();
-    return getAccountingHealth(db);
+    return getProAccountingService().getAccountingHealth();
   });
 
   register(ipcMain, 'pro:validateTaxCompliance', ({ draftId, transactionId }) => {
-    const db = requireDb();
-    return validateTaxCompliance(db, { draftId, transactionId });
+    return getProAccountingService().validateTaxCompliance({ draftId, transactionId });
   });
 
   register(ipcMain, 'pro:getVatSummary', ({ from, to }) => {
-    const db = requireDb();
-    return getVatSummary(db, { from, to });
+    return getProAccountingService().getVatSummary({ from, to });
   });
 
   register(ipcMain, 'pro:listWorkflowEntries', () => {
-    const db = requireDb();
-    return listProWorkflowEntries(db);
+    return getProWorkflowService().list();
   });
 
   register(ipcMain, 'pro:upsertWorkflowEntry', ({ transactionId, transactionJson, draftJson }) => {
-    const db = requireDb();
-    return upsertProWorkflowEntry(db, { transactionId, transactionJson, draftJson });
+    return getProWorkflowService().upsert({ transactionId, transactionJson, draftJson });
   });
 
   register(ipcMain, 'updater:getStatus', () => {
