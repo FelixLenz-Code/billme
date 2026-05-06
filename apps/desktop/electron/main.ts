@@ -34,9 +34,12 @@ import { startRecurringScheduler, stopRecurringScheduler } from './recurringSche
 import { initAutoUpdater } from './updater';
 import { initNotificationPush } from './notifications';
 import { logger } from '../utils/logger';
+import { PRODUCT_PROFILE } from '../productProfile';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL || process.env.ELECTRON_RENDERER_URL);
+
+app.setName(PRODUCT_PROFILE.appName);
 
 let userDataPath: string | null = null;
 let portalSyncStop: (() => void) | null = null;
@@ -123,7 +126,7 @@ const createWindow = async () => {
 
 const requireDb = () => {
   if (!userDataPath) throw new Error('userDataPath not initialized');
-  return initDb(userDataPath);
+  return initDb(userDataPath, { dbFileName: PRODUCT_PROFILE.dbFileName });
 };
 
 registerIpcHandlers(ipcMain, {
@@ -162,13 +165,13 @@ app.whenReady().then(async () => {
     app.setPath('cache', process.env.BILLME_E2E_CACHE_DIR ?? path.join(e2eUserDataDir, 'cache'));
   } else if (isDev) {
     // In some dev environments, the default userData/cache paths may be unwritable.
-    const devBase = path.join(app.getPath('temp'), 'billme-dev');
+    const devBase = path.join(app.getPath('temp'), `${PRODUCT_PROFILE.backupPrefix}-dev`);
     app.setPath('userData', devBase);
     app.setPath('cache', path.join(devBase, 'cache'));
   }
 
   userDataPath = app.getPath('userData');
-  const db = initDb(userDataPath);
+  const db = initDb(userDataPath, { dbFileName: PRODUCT_PROFILE.dbFileName });
 
   if (isDev) {
     // Dev convenience: seed initial data if DB is empty.

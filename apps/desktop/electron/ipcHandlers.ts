@@ -4,14 +4,14 @@ import path from 'path';
 import type Database from 'better-sqlite3';
 import type { DocumentTemplateKind, Invoice } from '../types';
 import { logger } from '../utils/logger';
-import { closeDb, getDb, initDb } from '../db/connection';
+import { closeDb, getDb, getDbPath, initDb } from '../db/connection';
 import { createInvoiceFromOffer, deleteInvoice, listInvoices, upsertInvoice } from '../db/invoicesRepo';
 import {
-  applyOfferDecision,
   deleteOffer,
   getOffer,
   listOffers,
-  markOfferPublished,
+  publishOfferToPortal,
+  syncPublishedOfferDecisionFromPortal,
   upsertOffer,
 } from '../db/offersRepo';
 import { deleteClient, getClient, listClients, upsertClient } from '../db/clientsRepo';
@@ -70,6 +70,7 @@ import { getCurrentUpdateStatus, downloadUpdate, quitAndInstall } from './update
 import { getInvoiceDunningStatus } from '../services/dunningService';
 import { buildEurCsv, getEurReport, listEurItems, upsertEurItemClassification } from '../services/eurReport';
 import { listAllEurRules, upsertEurRule, deleteEurRule } from '../db/eurRulesRepo';
+import { PRODUCT_PROFILE } from '../productProfile';
 
 const computeGrossFromItems = (doc: Invoice, settings: AppSettings): number => {
   const net = (doc.items ?? []).reduce((acc, it) => acc + (Number(it.total) || 0), 0);
@@ -640,57 +641,52 @@ export const registerIpcHandlers = (
     const baseUrl = settings?.portal?.baseUrl?.trim();
     if (!baseUrl) throw new Error('Portal baseUrl not configured (Settings → Portal)');
 
-    const apiKey = await secrets.get('portal.apiKey');
-    const token = crypto.randomBytes(24).toString('base64url');
+    const res = await publishOfferToPortal(db, {
+      offerId,
+      expiresAt,
+      portalGateway: {
+        publishOffer: async ({ expiresAt: publishExpiresAt }) => {
+          const apiKey = await secrets.get('portal.apiKey');
+          const token = crypto.randomBytes(24).toString('base64url');
+          const pdf = await exportPdf({
+            kind: 'offer',
+            id: offerId,
+            suggestedName: `${offer.number || 'offer'}-${offer.client || offerId}`,
+            userDataPath: getUserDataPath(),
+          });
 
-    const pdf = await exportPdf({
-      kind: 'offer',
-      id: offerId,
-      suggestedName: `${offer.number || 'offer'}-${offer.client || offerId}`,
-      userDataPath: getUserDataPath(),
+          return portalClient.publishOffer({
+            baseUrl,
+            apiKey,
+            token,
+            snapshot: offer,
+            customerRef: deriveCustomerRef(offer),
+            customerLabel: offer.client,
+            expiresAt: publishExpiresAt ?? offer.dueDate,
+            pdfBytes: pdf.bytes,
+          });
+        },
+      },
     });
 
-    const res = await portalClient.publishOffer({
-      baseUrl,
-      apiKey,
-      token,
-      snapshot: offer,
-      customerRef: deriveCustomerRef(offer),
-      customerLabel: offer.client,
-      expiresAt: expiresAt ?? offer.dueDate,
-      pdfBytes: pdf.bytes,
-    });
-
-    markOfferPublished(db, offerId, { token, publishedAt: new Date().toISOString() });
-    return res;
+    return { ok: true, token: res.token, publicUrl: res.publicUrl };
   });
 
   register(ipcMain, 'portal:syncOfferStatus', async ({ offerId }) => {
     const db = requireDb();
-    const offer = getOffer(db, offerId);
-    if (!offer) throw new Error('Offer not found');
-    if (!offer.shareToken) throw new Error('Offer is not published');
 
     const settings = getSettings(db);
     const baseUrl = settings?.portal?.baseUrl?.trim();
     if (!baseUrl) throw new Error('Portal baseUrl not configured (Settings → Portal)');
 
-    const status = await portalClient.getOfferStatus(baseUrl, offer.shareToken);
-    const decision = status.decision ?? null;
-    if (!decision) return { ok: true, decision: null, updated: false };
-
-    const beforeAcceptedAt = offer.acceptedAt;
-    if (beforeAcceptedAt) return { ok: true, decision, updated: false };
-
-    applyOfferDecision(db, offerId, {
-      decidedAt: decision.decidedAt,
-      decision: decision.decision,
-      acceptedName: decision.acceptedName,
-      acceptedEmail: decision.acceptedEmail,
-      decisionTextVersion: decision.decisionTextVersion,
+    const result = await syncPublishedOfferDecisionFromPortal(db, {
+      offerId,
+      portalGateway: {
+        getOfferStatus: (shareToken) => portalClient.getOfferStatus(baseUrl, shareToken),
+      },
     });
 
-    return { ok: true, decision, updated: true };
+    return { ok: true, decision: result.decision, updated: result.updated };
   });
 
   register(ipcMain, 'portal:publishInvoice', async ({ invoiceId, expiresAt }) => {
@@ -767,7 +763,7 @@ export const registerIpcHandlers = (
     const backupsDir = path.join(userDataPath, 'backups');
     ensureDir(backupsDir);
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const dest = path.join(backupsDir, `billme-${ts}.sqlite`);
+    const dest = path.join(backupsDir, `${PRODUCT_PROFILE.backupPrefix}-${ts}.sqlite`);
     await backupSqlite(db, dest);
     return { path: dest };
   });
@@ -803,9 +799,9 @@ export const registerIpcHandlers = (
       logger.warn('IPC:Backup', 'Failed to close database before restore', { error: String(error) });
     }
 
-    const destDbPath = path.join(userDataPath, 'billme.sqlite');
+    const destDbPath = getDbPath();
     fs.copyFileSync(resolved, destDbPath);
-    initDb(userDataPath);
+    initDb(userDataPath, { dbFileName: PRODUCT_PROFILE.dbFileName });
     const verification = verifyAuditChain(getDb());
     return { ok: verification.ok, verification };
   });

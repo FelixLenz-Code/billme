@@ -7,9 +7,9 @@ export interface ProductProfile {
 }
 
 export const PRODUCT_PROFILE: ProductProfile = {
-  appId: 'com.billme.lite',
-  appName: 'Billme Lite',
-  productName: 'Billme Lite',
-  dbFileName: 'billme-lite.sqlite',
-  backupPrefix: 'billme-lite',
+  appId: 'com.billme.desktop',
+  appName: 'Billme',
+  productName: 'Billme',
+  dbFileName: 'billme.sqlite',
+  backupPrefix: 'billme',
 };

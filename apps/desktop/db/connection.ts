@@ -6,6 +6,11 @@ import { runMigrations } from './migrate';
 
 let db: Database.Database | null = null;
 let dbPath: string | null = null;
+export const DEFAULT_DB_FILE_NAME = 'billme.sqlite';
+
+interface InitDbOptions {
+  dbFileName?: string;
+}
 
 export const getDb = (): Database.Database => {
   if (!db) {
@@ -14,11 +19,12 @@ export const getDb = (): Database.Database => {
   return db;
 };
 
-export const initDb = (userDataPath: string): Database.Database => {
+export const initDb = (userDataPath: string, options: InitDbOptions = {}): Database.Database => {
   if (db) return db;
 
+  const dbFileName = options.dbFileName ?? DEFAULT_DB_FILE_NAME;
   fs.mkdirSync(userDataPath, { recursive: true });
-  dbPath = path.join(userDataPath, 'billme.sqlite');
+  dbPath = path.join(userDataPath, dbFileName);
   db = new Database(dbPath);
   db.exec(bootstrapSql);
   runMigrations(db);
