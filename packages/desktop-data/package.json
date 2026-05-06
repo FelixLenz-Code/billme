@@ -6,11 +6,16 @@
   "dependencies": {
     "@billme/desktop-core": "workspace:*",
     "@billme/desktop-services": "workspace:*",
+    "@billme/server-core": "workspace:*",
     "drizzle-orm": "^0.44.4",
     "zod": "^3.25.76"
   },
   "peerDependencies": {
     "better-sqlite3": "^12.4.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.9.1"
   },
   "exports": {
     ".": {
@@ -25,9 +30,25 @@
       "types": "./src/backup.ts",
       "default": "./src/backup.ts"
     },
+    "./billingDomainCompat": {
+      "types": "./src/billingDomainCompat.ts",
+      "default": "./src/billingDomainCompat.ts"
+    },
+    "./dunning": {
+      "types": "./src/dunning.ts",
+      "default": "./src/dunning.ts"
+    },
     "./drizzle": {
       "types": "./src/drizzle.ts",
       "default": "./src/drizzle.ts"
+    },
+    "./invoicesRepo": {
+      "types": "./src/invoicesRepo.ts",
+      "default": "./src/invoicesRepo.ts"
+    },
+    "./offersRepo": {
+      "types": "./src/offersRepo.ts",
+      "default": "./src/offersRepo.ts"
     },
     "./validation-schemas": {
       "types": "./src/validation-schemas.ts",
@@ -52,6 +73,10 @@
     "./financeImportRepo": {
       "types": "./src/financeImportRepo.ts",
       "default": "./src/financeImportRepo.ts"
+    },
+    "./recurring": {
+      "types": "./src/recurring.ts",
+      "default": "./src/recurring.ts"
     }
   }
 }

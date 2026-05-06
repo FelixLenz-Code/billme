@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
+import {
+  buildNextProjectCode,
+  ensureDefaultProjectForClient as ensureDefaultProjectForClientDomain,
+} from '@billme/server-core/services';
+import type { SyncDefaultProjectPorts } from '@billme/server-core/ports';
 import type { Project } from '../types';
 import { appendAuditLog } from './audit';
 
@@ -35,86 +40,82 @@ const rowToProject = (row: ProjectRow): Project => {
   };
 };
 
-const nextProjectCode = (db: Database.Database, year: string): string => {
-  const like = `PRJ-${year}-%`;
-  const rows = db
-    .prepare(`SELECT code FROM client_projects WHERE code LIKE ?`)
-    .all(like) as Array<{ code: string | null }>;
+const listProjectCodesByPrefix = (db: Database.Database, prefix: string): Array<string | null> => {
+  return (db.prepare('SELECT code FROM client_projects WHERE code LIKE ?').all(`${prefix}%`) as Array<{ code: string | null }>)
+    .map((row) => row.code);
+};
 
-  let max = 0;
-  for (const r of rows) {
-    if (!r.code) continue;
-    const m = /^PRJ-\d{4}-(\d+)$/.exec(r.code);
-    if (!m) continue;
-    const seq = Number(m[1]!);
-    if (!Number.isFinite(seq)) continue;
-    max = Math.max(max, seq);
-  }
-  return `PRJ-${year}-${String(max + 1).padStart(3, '0')}`;
+const nextProjectCode = (db: Database.Database, year: string): string => {
+  return buildNextProjectCode(listProjectCodesByPrefix(db, `PRJ-${year}-`), year);
 };
 
 export const ensureDefaultProjectForClient = (db: Database.Database, clientId: string): Project => {
-  const existing = db
-    .prepare(
-      `
-        SELECT * FROM client_projects
-        WHERE client_id = ? AND name = 'Allgemein' AND archived_at IS NULL
-        ORDER BY start_date DESC
-        LIMIT 1
-      `,
-    )
-    .get(clientId) as ProjectRow | undefined;
-  if (existing) return rowToProject(existing);
-
-  const now = new Date().toISOString();
-  const nowDate = now.split('T')[0] ?? now;
-  const year = String(new Date(now).getFullYear());
-
-  const project: Project = {
-    id: randomUUID(),
-    clientId,
-    code: nextProjectCode(db, year),
-    name: 'Allgemein',
-    status: 'active',
-    budget: 0,
-    startDate: nowDate,
+  const ports: SyncDefaultProjectPorts<Project & { clientId: string }> = {
+    tx: {
+      inTransaction<TResult>(work: () => TResult): TResult {
+        return db.transaction(work)();
+      },
+    },
+    getActiveDefaultProjectForClient: (currentClientId) => {
+      const existing = db
+        .prepare(
+          `
+            SELECT * FROM client_projects
+            WHERE client_id = ? AND name = 'Allgemein' AND archived_at IS NULL
+            ORDER BY start_date DESC
+            LIMIT 1
+          `,
+        )
+        .get(currentClientId) as ProjectRow | undefined;
+      return existing ? rowToProject(existing) as Project & { clientId: string } : null;
+    },
+    listProjectCodesByPrefix: (prefix) => listProjectCodesByPrefix(db, prefix),
+    saveProject: (project) => {
+      db.prepare(
+        `
+          INSERT INTO client_projects (
+            id, client_id, code, name, status, budget, start_date, end_date, description,
+            archived_at, created_at, updated_at
+          ) VALUES (
+            @id, @clientId, @code, @name, @status, @budget, @startDate, @endDate, @description,
+            @archivedAt, @createdAt, @updatedAt
+          )
+        `,
+      ).run({
+        id: project.id,
+        clientId: project.clientId,
+        code: project.code ?? null,
+        name: project.name,
+        status: project.status,
+        budget: project.budget,
+        startDate: project.startDate,
+        endDate: project.endDate ?? null,
+        description: project.description ?? null,
+        archivedAt: project.archivedAt ?? null,
+        createdAt: project.createdAt ?? null,
+        updatedAt: project.updatedAt ?? null,
+      });
+      return project;
+    },
   };
 
-  db.prepare(
-    `
-      INSERT INTO client_projects (
-        id, client_id, code, name, status, budget, start_date, end_date, description,
-        archived_at, created_at, updated_at
-      ) VALUES (
-        @id, @clientId, @code, @name, @status, @budget, @startDate, @endDate, @description,
-        @archivedAt, @createdAt, @updatedAt
-      )
-    `,
-  ).run({
-    id: project.id,
+  const result = ensureDefaultProjectForClientDomain(ports, {
     clientId,
-    code: project.code ?? null,
-    name: project.name,
-    status: project.status,
-    budget: project.budget,
-    startDate: project.startDate,
-    endDate: null,
-    description: null,
-    archivedAt: null,
-    createdAt: now,
-    updatedAt: now,
+    createProjectId: () => randomUUID(),
   });
 
-  appendAuditLog(db, {
-    entityType: 'project',
-    entityId: project.id,
-    action: 'project.create',
-    reason: 'auto:default',
-    before: null,
-    after: project,
-  });
+  if (result.created) {
+    appendAuditLog(db, {
+      entityType: 'project',
+      entityId: result.project.id,
+      action: 'project.create',
+      reason: 'auto:default',
+      before: null,
+      after: result.project,
+    });
+  }
 
-  return { ...project, createdAt: now, updatedAt: now };
+  return result.project;
 };
 
 export const listProjects = (

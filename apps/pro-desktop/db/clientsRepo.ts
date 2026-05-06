@@ -1,4 +1,11 @@
 import type Database from 'better-sqlite3';
+import {
+  chooseDefaultBillingAddress,
+  chooseDefaultBillingEmail,
+  normalizeClientAddresses,
+  normalizeClientEmails,
+  prepareClientForUpsert,
+} from '@billme/server-core/services';
 import type { Activity, Client, ClientAddress, ClientEmail, Project } from '../types';
 import { formatAddressMultiline } from '../utils/formatters';
 import { ensureDefaultProjectForClient } from './projectsRepo';
@@ -43,60 +50,6 @@ type ClientEmailRow = {
   email: string;
   is_default_general: number;
   is_default_billing: number;
-};
-
-const normalizeClientAddresses = (client: Client): ClientAddress[] => {
-  const list = (client.addresses ?? []).filter(Boolean) as ClientAddress[];
-  if (list.length > 0) return list;
-
-  // Backfill: old freeform address gets stored into "street" with empty zip/city.
-  return [
-    {
-      id: `addr-${client.id}-1`,
-      clientId: client.id,
-      label: 'Rechnungsadresse',
-      kind: 'billing',
-      company: client.company,
-      contactPerson: client.contactPerson,
-      street: client.address ?? '',
-      zip: '',
-      city: '',
-      country: 'DE',
-      isDefaultBilling: true,
-      isDefaultShipping: true,
-    },
-  ];
-};
-
-const normalizeClientEmails = (client: Client): ClientEmail[] => {
-  const list = (client.emails ?? []).filter(Boolean) as ClientEmail[];
-  if (list.length > 0) return list;
-
-  return [
-    {
-      id: `email-${client.id}-1`,
-      clientId: client.id,
-      label: 'Buchhaltung',
-      kind: 'billing',
-      email: client.email ?? '',
-      isDefaultGeneral: true,
-      isDefaultBilling: true,
-    },
-  ];
-};
-
-const chooseDefaultBillingAddress = (addresses: ClientAddress[]): ClientAddress | null => {
-  if (addresses.length === 0) return null;
-  return (
-    addresses.find((a) => a.isDefaultBilling) ??
-    addresses.find((a) => a.kind === 'billing') ??
-    addresses[0]
-  );
-};
-
-const chooseDefaultBillingEmail = (emails: ClientEmail[]): ClientEmail | null => {
-  if (emails.length === 0) return null;
-  return emails.find((e) => e.isDefaultBilling) ?? emails.find((e) => e.isDefaultGeneral) ?? emails[0];
 };
 
 type ProjectRow = {
@@ -227,8 +180,8 @@ export const listClients = (db: Database.Database): Client[] => {
     };
 
     // Backward-compatible default fields.
-    const addresses = normalizeClientAddresses(baseClient);
-    const emails = normalizeClientEmails(baseClient);
+    const addresses = normalizeClientAddresses(baseClient) as ClientAddress[];
+    const emails = normalizeClientEmails(baseClient) as ClientEmail[];
     const billingAddress = chooseDefaultBillingAddress(addresses);
     const billingEmail = chooseDefaultBillingEmail(emails);
 
@@ -254,30 +207,23 @@ export const upsertClient = (db: Database.Database, client: Client): Client => {
       | undefined;
     const existingCustomerNumber = exists?.customer_number?.trim() ?? '';
 
-    const addresses = normalizeClientAddresses(client);
-    const emails = normalizeClientEmails(client);
-    const billingAddress = chooseDefaultBillingAddress(addresses);
-    const billingEmail = chooseDefaultBillingEmail(emails);
+    const prepared = prepareClientForUpsert(client, {
+      existingCustomerNumber,
+      customerNumberExists: (customerNumber: string) => {
+        const conflictingCustomerNumber = db
+          .prepare('SELECT id FROM clients WHERE customer_number = ? AND id <> ? LIMIT 1')
+          .get(customerNumber, client.id) as { id: string } | undefined;
+        return Boolean(conflictingCustomerNumber);
+      },
+      reserveCustomerNumber: () => reserveNumber(db, 'customer'),
+    });
 
-    const legacyAddress = billingAddress ? formatAddressMultiline(billingAddress) : client.address;
-    const legacyEmail = billingEmail?.email ?? client.email;
-    let customerNumber = client.customerNumber?.trim() ?? '';
-    if (!customerNumber && existingCustomerNumber) {
-      customerNumber = existingCustomerNumber;
-    }
-    let customerReservationId: string | null = null;
-    if (!customerNumber) {
-      const reservation = reserveNumber(db, 'customer');
-      customerNumber = reservation.number;
-      customerReservationId = reservation.reservationId;
-    }
-
-    const conflictingCustomerNumber = db
-      .prepare('SELECT id FROM clients WHERE customer_number = ? AND id <> ? LIMIT 1')
-      .get(customerNumber, client.id) as { id: string } | undefined;
-    if (conflictingCustomerNumber) {
-      throw new Error('Kundennummer bereits vergeben');
-    }
+    const addresses = prepared.addresses as ClientAddress[];
+    const emails = prepared.emails as ClientEmail[];
+    const legacyAddress = prepared.address;
+    const legacyEmail = prepared.email;
+    const customerNumber = prepared.customerNumber;
+    const customerReservationId = prepared.customerNumberReservationId;
 
     if (!exists) {
       db.prepare(
@@ -421,13 +367,13 @@ export const upsertClient = (db: Database.Database, client: Client): Client => {
       finalizeNumber(db, customerReservationId, client.id);
     }
 
-    return {
-      ...client,
-      customerNumber,
-      email: legacyEmail,
-      address: legacyAddress,
-      addresses,
-      emails,
+      return {
+        ...prepared,
+        customerNumber,
+        email: legacyEmail,
+        address: legacyAddress,
+        addresses,
+        emails,
     };
   });
 

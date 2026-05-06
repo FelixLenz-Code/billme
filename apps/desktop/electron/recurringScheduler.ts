@@ -1,6 +1,6 @@
 import { getDb } from '../db/connection';
 import { getSettings, setLastRecurringRun } from '../db/settingsRepo';
-import { processRecurringRun, RecurringResult } from '../services/recurringService';
+import { processRecurringRun, RecurringResult, shouldRunScheduledRecurring } from '../services/recurringService';
 import { pushNotification } from './notifications';
 import { logger } from '../utils/logger';
 
@@ -14,44 +14,7 @@ const shouldRunRecurring = (): boolean => {
   try {
     const db = getDb();
     const settings = getSettings(db);
-
-    if (!settings || !settings.automation.recurringEnabled) {
-      return false;
-    }
-
-    const now = new Date();
-    const [targetHour, targetMinute] = settings.automation.recurringRunTime
-      .split(':')
-      .map(Number);
-
-    // Check if we're at the target time (within 15-minute window)
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    const isTargetTime =
-      currentHour === targetHour &&
-      currentMinute >= targetMinute &&
-      currentMinute < targetMinute + 15;
-
-    if (!isTargetTime) {
-      return false;
-    }
-
-    // Check if we already ran today
-    const lastRun = settings.automation.lastRecurringRun;
-    if (lastRun) {
-      const lastRunDate = new Date(lastRun);
-      const isSameDay =
-        lastRunDate.getFullYear() === now.getFullYear() &&
-        lastRunDate.getMonth() === now.getMonth() &&
-        lastRunDate.getDate() === now.getDate();
-
-      if (isSameDay) {
-        return false; // Already ran today
-      }
-    }
-
-    return true;
+    return shouldRunScheduledRecurring(settings);
   } catch (error) {
     logger.error('RecurringScheduler', 'Error checking if should run', error as Error);
     return false;

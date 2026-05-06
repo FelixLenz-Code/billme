@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { portalClient } from '../services/portalClient';
-import { applyOfferDecision, listOffersPendingPortalSync } from '../db/offersRepo';
+import { syncPublishedOfferDecisionsFromPortal } from '../db/offersRepo';
 import { getSettings } from '../db/settingsRepo';
 import { pushNotification } from './notifications';
 
@@ -26,31 +26,19 @@ export const startPortalDecisionPolling = (params: {
       const baseUrl = settings?.portal?.baseUrl?.trim();
       if (!baseUrl) return;
 
-      const pending = listOffersPendingPortalSync(db);
-      if (pending.length === 0) return;
-
-      for (const o of pending) {
-        try {
-          const status = await portalClient.getOfferStatus(baseUrl, o.shareToken);
-          const decision = status.decision;
-          if (!decision) continue;
-
-          applyOfferDecision(db, o.id, {
-            decidedAt: decision.decidedAt,
-            decision: decision.decision,
-            acceptedName: decision.acceptedName,
-            acceptedEmail: decision.acceptedEmail,
-            decisionTextVersion: decision.decisionTextVersion,
-          });
+      await syncPublishedOfferDecisionsFromPortal(db, {
+        portalGateway: {
+          getOfferStatus: (shareToken) => portalClient.getOfferStatus(baseUrl, shareToken),
+        },
+        logger,
+        onDecisionApplied: (_offer, decision) => {
           pushNotification({
             type: 'portal',
             title: decision.decision === 'accepted' ? 'Angebot angenommen' : 'Angebot abgelehnt',
             message: `Ein Angebot wurde ${decision.decision === 'accepted' ? 'vom Kunden angenommen' : 'abgelehnt'}${decision.acceptedName ? ` (${decision.acceptedName})` : ''}`,
           });
-        } catch (e) {
-          logger.warn('[portal-sync] offer status failed', { offerId: o.id, err: String(e) });
-        }
-      }
+        },
+      });
     } catch (e) {
       logger.error('[portal-sync] tick failed', e);
     } finally {
@@ -58,7 +46,6 @@ export const startPortalDecisionPolling = (params: {
     }
   };
 
-  // fire once shortly after start to sync quickly
   void tick();
   timer = setInterval(() => void tick(), intervalMs);
 
@@ -70,4 +57,3 @@ export const startPortalDecisionPolling = (params: {
     tick,
   };
 };
-
