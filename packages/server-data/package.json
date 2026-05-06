@@ -1,0 +1,45 @@
+{
+  "name": "@billme/server-data",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "migrate": "tsx src/cli/migrate.ts",
+    "import:sqlite": "tsx src/cli/import-sqlite.ts"
+  },
+  "dependencies": {
+    "@billme/accounting-shared": "workspace:*",
+    "@billme/server-core": "workspace:*",
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^12.4.1"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.19.7",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.5",
+    "typescript": "~5.8.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./postgres": {
+      "types": "./src/postgres/index.ts",
+      "default": "./src/postgres/index.ts"
+    }
+  },
+  "types": "./src/index.ts"
+}

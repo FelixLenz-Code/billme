@@ -35,6 +35,10 @@ Important: GoBD conformity is always process- and setup-dependent (including org
 - `apps/desktop`: Electron desktop app
 - `apps/demo`: Cloudflare Worker-hosted browser demo (desktop UI + mock services)
 - `apps/offer-portal`: Hono TypeScript service for published offers/invoices
+- `apps/server-api`: Fastify server-mode API
+- `apps/server-worker`: background worker for server-mode automation
+- `apps/web`: Lite browser shell for server mode
+- `apps/web-pro`: Pro browser shell for server mode
 - `packages/ui`: Shared UI components and utilities
 
 ## Prerequisites
@@ -60,6 +64,17 @@ pnpm dev:renderer        # Renderer only
 pnpm build               # Build desktop bundles
 pnpm build:demo          # Build demo frontend + typecheck worker
 pnpm dist                # Build distributable desktop packages
+pnpm build:server-api    # Build the Fastify API
+pnpm build:server-cli    # Build the Billme server CLI package
+pnpm build:server-worker # Build the background worker
+pnpm build:web           # Build the lite browser shell
+pnpm build:web-pro       # Build the pro browser shell
+pnpm docker:server-mode  # Start the Docker compose stack
+pnpm docker:server-mode:logs
+pnpm docker:server-mode:down
+pnpm test:e2e:server:install
+pnpm test:e2e:server:smoke
+pnpm test:e2e:server:full
 pnpm -C apps/desktop test
 pnpm -C apps/desktop typecheck
 pnpm deploy:demo         # Deploy demo to Cloudflare Workers
@@ -67,10 +82,17 @@ pnpm -C apps/offer-portal dev
 pnpm -C apps/offer-portal build
 ```
 
+## Server CLI package
+
+`packages/server-cli` provides a typed server-mode HTTP client plus the `billme` CLI binary for auth, shared billing CRUD, exports, and the v1 pro catalog/template surface.
+
+Server-mode Playwright needs Docker or Podman access plus a local Chromium install. See `docs/server-mode-docker.md` for the smoke/full suite entrypoints, runtime override, and CI prerequisites.
+
 ## Documentation
 
 - `docs/architecture.md`
 - `docs/offer-portal.md`
+- `docs/server-mode-docker.md`
 - `docs/releasing.md`
 
 ## License

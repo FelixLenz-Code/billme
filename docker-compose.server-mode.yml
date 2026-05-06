@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    user: "${BILLME_POSTGRES_RUN_AS:-}"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${BILLME_POSTGRES_DB:-billme}
+      POSTGRES_USER: ${BILLME_POSTGRES_USER:-billme}
+      POSTGRES_PASSWORD: ${BILLME_POSTGRES_PASSWORD:-billme}
+    ports:
+      - "${BILLME_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - "${BILLME_POSTGRES_DATA_DIR:-billme-postgres-data}:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  server-api:
+    build:
+      context: .
+      dockerfile: apps/server-api/Dockerfile
+    init: true
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3100
+      SESSION_SECRET: ${BILLME_SESSION_SECRET:-billme-dev-session-secret}
+      DATABASE_URL: postgresql://${BILLME_POSTGRES_USER:-billme}:${BILLME_POSTGRES_PASSWORD:-billme}@postgres:5432/${BILLME_POSTGRES_DB:-billme}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${BILLME_API_PORT:-3100}:3100"
+
+  server-worker:
+    build:
+      context: .
+      dockerfile: apps/server-worker/Dockerfile
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      DATABASE_URL: postgresql://${BILLME_POSTGRES_USER:-billme}:${BILLME_POSTGRES_PASSWORD:-billme}@postgres:5432/${BILLME_POSTGRES_DB:-billme}
+      WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
+      WORKER_RECURRING_INTERVAL_MS: ${WORKER_RECURRING_INTERVAL_MS:-900000}
+      WORKER_DUNNING_INTERVAL_MS: ${WORKER_DUNNING_INTERVAL_MS:-900000}
+      WORKER_EMAIL_QUEUE_INTERVAL_MS: ${WORKER_EMAIL_QUEUE_INTERVAL_MS:-60000}
+      WORKER_PORTAL_SYNC_INTERVAL_MS: ${WORKER_PORTAL_SYNC_INTERVAL_MS:-60000}
+      WORKER_MAINTENANCE_INTERVAL_MS: ${WORKER_MAINTENANCE_INTERVAL_MS:-86400000}
+      WORKER_RUN_ONCE: ${WORKER_RUN_ONCE:-0}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server-api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_SERVER_API_URL: ${BILLME_PUBLIC_API_URL:-http://localhost:3100}
+    restart: unless-stopped
+    depends_on:
+      server-api:
+        condition: service_healthy
+    ports:
+      - "${BILLME_WEB_PORT:-4175}:8080"
+
+  web-pro:
+    build:
+      context: .
+      dockerfile: apps/web-pro/Dockerfile
+      args:
+        VITE_SERVER_API_URL: ${BILLME_PUBLIC_API_URL:-http://localhost:3100}
+    restart: unless-stopped
+    depends_on:
+      server-api:
+        condition: service_healthy
+    ports:
+      - "${BILLME_WEB_PRO_PORT:-4176}:8080"
+
+volumes:
+  billme-postgres-data:

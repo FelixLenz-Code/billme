@@ -1,8 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { BillmeApi } from '../../../apps/desktop/ipc/api';
+import type { BillmeApi } from '@billme/desktop-contracts/api';
 import '../../../apps/desktop/index.css';
+
+export type DesktopRendererRuntime = {
+  shell?: 'desktop' | 'web';
+  product?: 'lite' | 'pro';
+  navigation?: string[];
+  onLogout?: () => void;
+};
 
 export const createRendererQueryClient = (): QueryClient =>
   new QueryClient({
@@ -18,11 +25,20 @@ export const createRendererQueryClient = (): QueryClient =>
 
 export const mountDesktopRendererApp = async (
   rootElement: HTMLElement,
-  options?: { api?: BillmeApi },
-): Promise<void> => {
+  options?: { api?: BillmeApi; runtime?: DesktopRendererRuntime },
+): Promise<() => void> => {
+  const runtime = globalThis as {
+    billmeApi?: BillmeApi;
+    billmeRuntime?: DesktopRendererRuntime;
+  };
+
   if (options?.api) {
-    (globalThis as { billmeApi?: BillmeApi }).billmeApi = options.api;
+    runtime.billmeApi = options.api;
   }
+  if (options?.runtime) {
+    runtime.billmeRuntime = options.runtime;
+  }
+
   const { default: App } = await import('../../../apps/desktop/App');
   const queryClient = createRendererQueryClient();
   const root = ReactDOM.createRoot(rootElement);
@@ -33,4 +49,14 @@ export const mountDesktopRendererApp = async (
       </QueryClientProvider>
     </React.StrictMode>,
   );
+
+  return () => {
+    root.unmount();
+    if (options?.api && runtime.billmeApi === options.api) {
+      delete runtime.billmeApi;
+    }
+    if (options?.runtime && runtime.billmeRuntime === options.runtime) {
+      delete runtime.billmeRuntime;
+    }
+  };
 };

@@ -1,6 +1,25 @@
 import fs from 'fs';
 import path from 'path';
-import { app } from 'electron';
+
+const resolveElectronApp = (): { getPath(name: 'userData'): string } | null => {
+  if (typeof process === 'undefined' || !process.versions?.electron) {
+    return null;
+  }
+
+  try {
+    const dynamicRequire = Function('return typeof require !== "undefined" ? require : null;')() as
+      | ((id: string) => unknown)
+      | null;
+    const electron = dynamicRequire?.('electron') as {
+      app?: {
+        getPath(name: 'userData'): string;
+      };
+    } | null | undefined;
+    return electron?.app ?? null;
+  } catch {
+    return null;
+  }
+};
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -17,24 +36,37 @@ interface LogEntry {
 }
 
 class Logger {
-  private logDir: string;
-  private logFile: string;
+  private logDir: string | null;
+  private logFile: string | null;
   private isDev: boolean;
 
   constructor() {
-    this.isDev = process.env.NODE_ENV !== 'production';
+    this.isDev = typeof process === 'undefined' || process.env.NODE_ENV !== 'production';
+    this.logDir = null;
+    this.logFile = null;
 
     try {
-      this.logDir = path.join(app.getPath('userData'), 'logs');
+      const electronApp = resolveElectronApp();
+      if (!electronApp?.getPath) {
+        throw new Error('Electron app runtime unavailable');
+      }
+      this.logDir = path.join(electronApp.getPath('userData'), 'logs');
     } catch {
-      this.logDir = path.join(process.cwd(), '.test-logs');
+      if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
+        this.logDir = path.join(process.cwd(), '.test-logs');
+      }
     }
 
-    this.logFile = path.join(this.logDir, `app-${new Date().toISOString().split('T')[0]}.log`);
+    if (this.logDir) {
+      this.logFile = path.join(this.logDir, `app-${new Date().toISOString().split('T')[0]}.log`);
+    }
     this.ensureLogDir();
   }
 
   private ensureLogDir() {
+    if (!this.logDir) {
+      return;
+    }
     if (!fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });
     }
@@ -56,11 +88,13 @@ class Logger {
       if (error) console.error(error);
     }
 
-    try {
-      fs.appendFileSync(this.logFile, JSON.stringify(entry) + '\n');
-    } catch (writeError) {
-      console.error('Failed to write to log file:', writeError);
-      console.error('Original log entry:', entry);
+    if (this.logFile) {
+      try {
+        fs.appendFileSync(this.logFile, JSON.stringify(entry) + '\n');
+      } catch (writeError) {
+        console.error('Failed to write to log file:', writeError);
+        console.error('Original log entry:', entry);
+      }
     }
   }
 

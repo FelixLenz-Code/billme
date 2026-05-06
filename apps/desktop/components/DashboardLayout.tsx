@@ -6,6 +6,7 @@ import { ipc } from '../ipc/client';
 import { Titlebar } from './Titlebar';
 import billmeFullLogo from '../assets/billme-full-logo.svg';
 import { useNotificationsStore, type AppNotification } from '../state/notificationsStore';
+import { getBillmeRuntimeConfig } from '../runtime';
 
 type HeaderSearchResult = {
   key: string;
@@ -44,6 +45,25 @@ interface DashboardLayoutProps {
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, activePage, onNavigate, isEditorActive }) => {
   const navigate = useNavigate();
+  const runtime = React.useMemo(() => getBillmeRuntimeConfig(), []);
+  const visibleMenuItems = React.useMemo(() => {
+    const allItems = [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'clients', label: 'Kunden' },
+      { id: 'projects', label: 'Projekte' },
+      { id: 'documents', label: 'Dokumente' },
+      { id: 'finance', label: 'Finanzen' },
+      { id: 'articles', label: 'Artikel' },
+    ] as const;
+
+    if (!runtime.navigation || runtime.navigation.length === 0) {
+      return [...allItems];
+    }
+
+    return allItems.filter((item) => runtime.navigation?.includes(item.id));
+  }, [runtime.navigation]);
+  const includeProjectsInSearch = visibleMenuItems.some((item) => item.id === 'projects');
+  const includeArticlesInSearch = visibleMenuItems.some((item) => item.id === 'articles');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(-1);
@@ -105,8 +125,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
         ipc.invoices.list(),
         ipc.offers.list(),
         ipc.clients.list(),
-        ipc.projects.list({ includeArchived: true }),
-        ipc.articles.list(),
+        includeProjectsInSearch ? ipc.projects.list({ includeArchived: true }) : Promise.resolve([]),
+        includeArticlesInSearch ? ipc.articles.list() : Promise.resolve([]),
       ]);
 
       const results: HeaderSearchResult[] = [];
@@ -198,15 +218,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
     navigate({ to: result.to });
   };
 
-  // Simplified menu items for top nav (text only typically looks cleaner in top bars)
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'clients', label: 'Kunden' },
-    { id: 'projects', label: 'Projekte' },
-    { id: 'documents', label: 'Dokumente' },
-    { id: 'finance', label: 'Finanzen' },
-    { id: 'articles', label: 'Artikel' },
-  ];
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#f3f4f6] font-sans text-slate-800 overflow-hidden">
@@ -230,7 +241,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
 
             {/* Center: Navigation Pills */}
             <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 p-1.5 rounded-full border border-gray-200">
-              {menuItems.map((item) => (
+              {visibleMenuItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
