@@ -12,7 +12,12 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "lucide-react": "^0.562.0"
+    "lucide-react": "^0.562.0",
+    "tailwindcss": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3"
   },
   "types": "./src/index.ts"
 }
