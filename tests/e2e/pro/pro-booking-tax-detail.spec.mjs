@@ -123,7 +123,9 @@ test('booking detail UI enforces tax-case requirements and clears blockers after
 
   const row = page.locator('tbody tr').filter({ hasText: targetTx.counterparty }).first();
   await expect(row).toBeVisible();
-  await row.getByRole('button', { name: /Bearbeiten|Ansehen/ }).first().click();
+  await row.click();
+  await expect(page.getByRole('button', { name: 'Erweitern' })).toBeVisible();
+  await page.getByRole('button', { name: 'Erweitern' }).click();
 
   await expect(page.getByRole('heading', { name: 'Buchung erfassen' })).toBeVisible();
   await expect(page.getByText('Buchungssatz')).toBeVisible();

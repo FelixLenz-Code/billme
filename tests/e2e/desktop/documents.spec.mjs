@@ -17,19 +17,29 @@ test.afterEach(async () => {
 
 test('opens a document and converts an accepted offer to an invoice', async () => {
   const { page, baseUrl } = desktop;
+  const invoicesBefore = await invokeDesktopIpc(page, 'invoices:list', {});
+  const invoiceIdsBefore = new Set(invoicesBefore.map((invoice) => invoice.id));
+  const acceptedOffer = (await invokeDesktopIpc(page, 'offers:list', {})).find(
+    (offer) =>
+      offer.acceptedAt
+      || offer.acceptedBy
+      || offer.shareDecision === 'accepted'
+      || offer.status === 'accepted',
+  );
+  expect(acceptedOffer).toBeTruthy();
+
   await page.goto(appUrl(baseUrl, '/documents'));
 
   await expect(page.getByRole('button', { name: 'Vorlagen' })).toBeVisible();
-  await expect(page.getByText('RE-2026-002')).toBeVisible();
+  const visibleInvoiceNumber = page.getByText(/^RE-\d{4}-\d{3}$/).first();
+  await expect(visibleInvoiceNumber).toBeVisible();
+  const openedInvoiceNumber = await visibleInvoiceNumber.textContent();
+  await visibleInvoiceNumber.click();
+  await expect(page.getByRole('heading', { name: openedInvoiceNumber ?? /RE-\d{4}-\d{3}/ })).toBeVisible();
+  await invokeDesktopIpc(page, 'documents:convertOfferToInvoice', { offerId: acceptedOffer.id });
 
-  await page.locator('button:has-text("Rechnungen")').first().click();
-  await page.getByRole('button', { name: 'Angebote' }).click();
-  await expect(page.getByText('ANG-2026-001')).toBeVisible();
-  await page.getByText('ANG-2026-001').first().click();
-  await expect(page.getByRole('heading', { name: 'ANG-2026-001' })).toBeVisible();
-  await invokeDesktopIpc(page, 'documents:convertOfferToInvoice', { offerId: 'offer-open-1' });
-
-  const invoices = await invokeDesktopIpc(page, 'invoices:list', {});
-  expect(invoices.length).toBeGreaterThan(2);
-  expect(invoices.some((invoice) => invoice.clientId === 'c2' && invoice.number !== 'RE-2026-002')).toBeTruthy();
+  const invoicesAfter = await invokeDesktopIpc(page, 'invoices:list', {});
+  expect(invoicesAfter).toHaveLength(invoicesBefore.length + 1);
+  const createdInvoice = invoicesAfter.find((invoice) => !invoiceIdsBefore.has(invoice.id));
+  expect(createdInvoice?.clientId).toBe(acceptedOffer.clientId);
 });

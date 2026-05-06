@@ -85,8 +85,9 @@ test('posts and reverses a pro draft while accounting health reflects transition
 
   const healthAfterPost = await invokeDesktopIpc(page, 'pro:getAccountingHealth');
   await page.reload();
-  const healthCard = page.locator('div.rounded-2xl').filter({ hasText: 'Posted / Drafts' }).first();
-  await expect(healthCard).toContainText(String(healthAfterPost.postedCount));
+  await expect(
+    page.getByRole('button', { name: new RegExp(`Gebucht\\s+${healthAfterPost.postedCount}`) }),
+  ).toBeVisible();
 
   if (blockingIssues.length > 0) {
     const afterBlocking = await invokeDesktopIpc(page, 'pro:getDraftByTransactionId', { transactionId: tx.id });

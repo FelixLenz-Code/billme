@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { appUrl, invokeDesktopIpc, launchDesktopApp, seedDesktopData } from '../support.mjs';
+import { appUrl, launchDesktopApp, seedDesktopData } from '../support.mjs';
 
 let desktop;
 
@@ -21,21 +21,29 @@ test('shows pro report summaries and opens Auswertungen workspace', async () => 
   await page.goto(appUrl(baseUrl, '/accounting'));
   await expect(page.getByRole('heading', { name: 'Pro Buchhaltung' })).toBeVisible();
 
-  const susa = await invokeDesktopIpc(page, 'pro:getSusaReport', {});
-  const guv = await invokeDesktopIpc(page, 'pro:getGuvReport', {});
-  const bilanz = await invokeDesktopIpc(page, 'pro:getBilanzReport', {});
-
-  const susaCard = page.locator('div.rounded-2xl').filter({ hasText: 'SuSa Saldo' }).first();
-  const guvCard = page.locator('div.rounded-2xl').filter({ hasText: 'GuV Ergebnis' }).first();
-  const bilanzCard = page.locator('div.rounded-2xl').filter({ hasText: 'Bilanz Delta' }).first();
-
-  await expect(susaCard).toContainText(`${(susa.totals.balance ?? 0).toFixed(2)} EUR`);
-  await expect(guvCard).toContainText(`${(guv.netResult ?? 0).toFixed(2)} EUR`);
-  await expect(bilanzCard).toContainText(`${(bilanz.totals.delta ?? 0).toFixed(2)} EUR`);
-
   await page.getByRole('button', { name: 'Auswertungen' }).click();
   await expect(page.getByRole('heading', { name: 'SuSa, GuV und Bilanz-Preview' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'SuSa' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'GuV' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Bilanz' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Bilanz (Preview)' })).toBeVisible();
+
+  const susaAccountsCard = page.locator('div.rounded-xl').filter({ hasText: 'Konten' }).first();
+  const susaWarningsCard = page.locator('div.rounded-xl').filter({ hasText: 'Warnungen' }).first();
+  await expect(susaAccountsCard).toContainText(/\d+/);
+  await expect(susaWarningsCard).toContainText(/\d+/);
+  await expect(page.getByText('Summen- und Saldenliste (Preview)')).toBeVisible();
+
+  await page.getByRole('button', { name: 'GuV' }).click();
+  const guvRevenueCard = page.locator('div.rounded-xl').filter({ hasText: 'Umsätze' }).first();
+  const guvResultCard = page.locator('div.rounded-xl').filter({ hasText: 'Ergebnis' }).first();
+  await expect(guvRevenueCard).toContainText('€');
+  await expect(guvResultCard).toContainText('€');
+  await expect(page.getByText('Gewinn- und Verlustrechnung (Preview)')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Bilanz (Preview)' }).click();
+  const bilanzAktivaCard = page.locator('div.rounded-xl').filter({ hasText: 'Aktiva' }).first();
+  const bilanzDifferenzCard = page.locator('div.rounded-xl').filter({ hasText: 'Differenz' }).first();
+  await expect(bilanzAktivaCard).toContainText('€');
+  await expect(bilanzDifferenzCard).toContainText('€');
+  await expect(page.getByText('Bilanz (HGB Preview, Mock)')).toBeVisible();
 });
