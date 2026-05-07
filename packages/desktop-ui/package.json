@@ -1,0 +1,35 @@
+{
+  "name": "@billme/desktop-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "lucide-react": "^0.562.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./components/Toast": {
+      "types": "./src/components/Toast.tsx",
+      "default": "./src/components/Toast.tsx"
+    },
+    "./components/Spinner": {
+      "types": "./src/components/Spinner.tsx",
+      "default": "./src/components/Spinner.tsx"
+    },
+    "./components/SkeletonLoader": {
+      "types": "./src/components/SkeletonLoader.tsx",
+      "default": "./src/components/SkeletonLoader.tsx"
+    }
+  }
+}

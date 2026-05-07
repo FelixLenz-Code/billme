@@ -4,14 +4,14 @@ import path from 'path';
 import type Database from 'better-sqlite3';
 import type { DocumentTemplateKind, Invoice } from '../types';
 import { logger } from '../utils/logger';
-import { closeDb, getDb, initDb } from '../db/connection';
+import { closeDb, getDb, getDbPath, initDb } from '../db/connection';
 import { createInvoiceFromOffer, deleteInvoice, listInvoices, upsertInvoice } from '../db/invoicesRepo';
 import {
-  applyOfferDecision,
   deleteOffer,
   getOffer,
   listOffers,
-  markOfferPublished,
+  publishOfferToPortal,
+  syncPublishedOfferDecisionFromPortal,
   upsertOffer,
 } from '../db/offersRepo';
 import { deleteClient, getClient, listClients, upsertClient } from '../db/clientsRepo';
@@ -70,18 +70,25 @@ import { getCurrentUpdateStatus, downloadUpdate, quitAndInstall } from './update
 import { getInvoiceDunningStatus } from '../services/dunningService';
 import { buildEurCsv, getEurReport, listEurItems, upsertEurItemClassification } from '../services/eurReport';
 import { listAllEurRules, upsertEurRule, deleteEurRule } from '../db/eurRulesRepo';
-import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from '../services/taxMode';
+import { PRODUCT_PROFILE } from '../productProfile';
+import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from '@billme/server-core/services';
 
-const computeGrossFromItems = (doc: Invoice, settings: AppSettings): number => {
-  const snapshot = calculateInvoiceTaxSnapshot(
+const normalizeInvoiceTaxData = (doc: Invoice, settings: AppSettings): Invoice => {
+  const taxMode = resolveInvoiceTaxMode(doc.taxMode, settings);
+  const taxSnapshot = calculateInvoiceTaxSnapshot(
     {
       items: doc.items ?? [],
-      taxMode: resolveInvoiceTaxMode(doc.taxMode, settings),
+      taxMode,
       taxMeta: doc.taxMeta,
     },
     settings,
   );
-  return Number.isFinite(snapshot.grossAmount) ? snapshot.grossAmount : 0;
+  return {
+    ...doc,
+    taxMode,
+    taxSnapshot,
+    amount: taxSnapshot.grossAmount,
+  };
 };
 
 const deriveCustomerRef = (doc: Invoice): string => {
@@ -138,22 +145,7 @@ export const registerIpcHandlers = (
   register(ipcMain, 'invoices:upsert', ({ invoice, reason }) => {
     const db = requireDb();
     const settings = requireSettings(db);
-    const taxMode = resolveInvoiceTaxMode(invoice.taxMode, settings);
-    const taxSnapshot = calculateInvoiceTaxSnapshot(
-      {
-        items: invoice.items ?? [],
-        taxMode,
-        taxMeta: invoice.taxMeta,
-      },
-      settings,
-    );
-    const computed: Invoice = {
-      ...invoice,
-      taxMode,
-      taxSnapshot,
-      amount: computeGrossFromItems(invoice as Invoice, settings),
-    };
-    return upsertInvoice(db, computed, reason);
+    return upsertInvoice(db, normalizeInvoiceTaxData(invoice as Invoice, settings), reason);
   });
 
   register(ipcMain, 'invoices:delete', ({ id, reason }) => {
@@ -170,22 +162,7 @@ export const registerIpcHandlers = (
   register(ipcMain, 'offers:upsert', ({ offer, reason }) => {
     const db = requireDb();
     const settings = requireSettings(db);
-    const taxMode = resolveInvoiceTaxMode(offer.taxMode, settings);
-    const taxSnapshot = calculateInvoiceTaxSnapshot(
-      {
-        items: offer.items ?? [],
-        taxMode,
-        taxMeta: offer.taxMeta,
-      },
-      settings,
-    );
-    const computed: Invoice = {
-      ...offer,
-      taxMode,
-      taxSnapshot,
-      amount: computeGrossFromItems(offer as Invoice, settings),
-    };
-    return upsertOffer(db, computed, reason);
+    return upsertOffer(db, normalizeInvoiceTaxData(offer as Invoice, settings), reason);
   });
 
   register(ipcMain, 'offers:delete', ({ id, reason }) => {
@@ -306,8 +283,8 @@ export const registerIpcHandlers = (
 
   register(ipcMain, 'documents:createFromClient', ({ kind, clientId }) => {
     const db = requireDb();
-    const settings = requireSettings(db);
     const normalizedKind = kind === 'offer' ? 'offer' : 'invoice';
+    const settings = requireSettings(db);
 
     const client = getClient(db, clientId);
     if (!client) throw new Error('Client not found');
@@ -350,9 +327,9 @@ export const registerIpcHandlers = (
       clientAddress: billingAddress ? formatAddressMultiline(billingAddress) : '',
       billingAddressJson: billingAddress ?? null,
       shippingAddressJson: shippingAddress ?? null,
+      taxMode: resolveInvoiceTaxMode(undefined, settings),
       date: today,
       dueDate: normalizedKind === 'offer' ? today : '',
-      taxMode: settings.legal.smallBusinessRule ? 'small_business_19_ustg' : 'standard_vat',
       amount: 0,
       status: 'draft',
       items: [],
@@ -360,7 +337,7 @@ export const registerIpcHandlers = (
       history: [],
     };
 
-    return base;
+    return normalizeInvoiceTaxData(base, settings);
   });
 
   register(ipcMain, 'documents:convertOfferToInvoice', ({ offerId }) => {
@@ -669,57 +646,52 @@ export const registerIpcHandlers = (
     const baseUrl = settings?.portal?.baseUrl?.trim();
     if (!baseUrl) throw new Error('Portal baseUrl not configured (Settings → Portal)');
 
-    const apiKey = await secrets.get('portal.apiKey');
-    const token = crypto.randomBytes(24).toString('base64url');
+    const res = await publishOfferToPortal(db, {
+      offerId,
+      expiresAt,
+      portalGateway: {
+        publishOffer: async ({ expiresAt: publishExpiresAt }) => {
+          const apiKey = await secrets.get('portal.apiKey');
+          const token = crypto.randomBytes(24).toString('base64url');
+          const pdf = await exportPdf({
+            kind: 'offer',
+            id: offerId,
+            suggestedName: `${offer.number || 'offer'}-${offer.client || offerId}`,
+            userDataPath: getUserDataPath(),
+          });
 
-    const pdf = await exportPdf({
-      kind: 'offer',
-      id: offerId,
-      suggestedName: `${offer.number || 'offer'}-${offer.client || offerId}`,
-      userDataPath: getUserDataPath(),
+          return portalClient.publishOffer({
+            baseUrl,
+            apiKey,
+            token,
+            snapshot: offer,
+            customerRef: deriveCustomerRef(offer),
+            customerLabel: offer.client,
+            expiresAt: publishExpiresAt ?? offer.dueDate,
+            pdfBytes: pdf.bytes,
+          });
+        },
+      },
     });
 
-    const res = await portalClient.publishOffer({
-      baseUrl,
-      apiKey,
-      token,
-      snapshot: offer,
-      customerRef: deriveCustomerRef(offer),
-      customerLabel: offer.client,
-      expiresAt: expiresAt ?? offer.dueDate,
-      pdfBytes: pdf.bytes,
-    });
-
-    markOfferPublished(db, offerId, { token, publishedAt: new Date().toISOString() });
-    return res;
+    return { ok: true, token: res.token, publicUrl: res.publicUrl };
   });
 
   register(ipcMain, 'portal:syncOfferStatus', async ({ offerId }) => {
     const db = requireDb();
-    const offer = getOffer(db, offerId);
-    if (!offer) throw new Error('Offer not found');
-    if (!offer.shareToken) throw new Error('Offer is not published');
 
     const settings = getSettings(db);
     const baseUrl = settings?.portal?.baseUrl?.trim();
     if (!baseUrl) throw new Error('Portal baseUrl not configured (Settings → Portal)');
 
-    const status = await portalClient.getOfferStatus(baseUrl, offer.shareToken);
-    const decision = status.decision ?? null;
-    if (!decision) return { ok: true, decision: null, updated: false };
-
-    const beforeAcceptedAt = offer.acceptedAt;
-    if (beforeAcceptedAt) return { ok: true, decision, updated: false };
-
-    applyOfferDecision(db, offerId, {
-      decidedAt: decision.decidedAt,
-      decision: decision.decision,
-      acceptedName: decision.acceptedName,
-      acceptedEmail: decision.acceptedEmail,
-      decisionTextVersion: decision.decisionTextVersion,
+    const result = await syncPublishedOfferDecisionFromPortal(db, {
+      offerId,
+      portalGateway: {
+        getOfferStatus: (shareToken) => portalClient.getOfferStatus(baseUrl, shareToken),
+      },
     });
 
-    return { ok: true, decision, updated: true };
+    return { ok: true, decision: result.decision, updated: result.updated };
   });
 
   register(ipcMain, 'portal:publishInvoice', async ({ invoiceId, expiresAt }) => {
@@ -784,6 +756,11 @@ export const registerIpcHandlers = (
     return secrets.delete(key);
   });
 
+  register(ipcMain, 'secrets:has', async ({ key }) => {
+    const value = await secrets.get(key);
+    return Boolean(value && value.length > 0);
+  });
+
   register(ipcMain, 'db:backup', async () => {
     const db = requireDb();
     const userDataPath = getUserDataPath();
@@ -791,13 +768,34 @@ export const registerIpcHandlers = (
     const backupsDir = path.join(userDataPath, 'backups');
     ensureDir(backupsDir);
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const dest = path.join(backupsDir, `billme-${ts}.sqlite`);
+    const dest = path.join(backupsDir, `${PRODUCT_PROFILE.backupPrefix}-${ts}.sqlite`);
     await backupSqlite(db, dest);
     return { path: dest };
   });
 
   register(ipcMain, 'db:restore', ({ path: restorePath }) => {
     const userDataPath = getUserDataPath();
+    const backupsDir = path.resolve(path.join(userDataPath, 'backups'));
+    const resolved = path.resolve(restorePath);
+    const allowedExt = /\.(sqlite|db)$/i.test(resolved);
+    if (!allowedExt) throw new Error('Restore expects a .sqlite or .db backup file');
+    if (!(resolved === backupsDir || resolved.startsWith(backupsDir + path.sep))) {
+      throw new Error('Refusing to restore from outside backups directory');
+    }
+    const stat = fs.lstatSync(resolved);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('Restore path must be a regular file');
+    }
+    const header = Buffer.alloc(16);
+    const fd = fs.openSync(resolved, 'r');
+    try {
+      fs.readSync(fd, header, 0, 16, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (header.toString('utf8') !== 'SQLite format 3\u0000') {
+      throw new Error('Restore file is not a valid SQLite database');
+    }
 
     // Close existing DB, overwrite it, reopen.
     try {
@@ -806,9 +804,9 @@ export const registerIpcHandlers = (
       logger.warn('IPC:Backup', 'Failed to close database before restore', { error: String(error) });
     }
 
-    const destDbPath = path.join(userDataPath, 'billme.sqlite');
-    fs.copyFileSync(restorePath, destDbPath);
-    initDb(userDataPath);
+    const destDbPath = getDbPath();
+    fs.copyFileSync(resolved, destDbPath);
+    initDb(userDataPath, { dbFileName: PRODUCT_PROFILE.dbFileName });
     const verification = verifyAuditChain(getDb());
     return { ok: verification.ok, verification };
   });
@@ -952,7 +950,8 @@ export const registerIpcHandlers = (
     let providerConfig: SmtpConfig | ResendConfig;
 
     if (provider === 'smtp') {
-      if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
+      const resolvedSmtpPassword = smtpPassword || (await secrets.get('smtp.password')) || undefined;
+      if (!smtpHost || !smtpPort || !smtpUser || !resolvedSmtpPassword) {
         return {
           success: false,
           error: 'SMTP-Konfiguration unvollständig. Bitte füllen Sie alle erforderlichen Felder aus.',
@@ -965,11 +964,12 @@ export const registerIpcHandlers = (
         secure: smtpSecure ?? true,
         auth: {
           user: smtpUser,
-          pass: smtpPassword,
+          pass: resolvedSmtpPassword,
         },
       } as SmtpConfig;
     } else {
-      if (!resendApiKey) {
+      const resolvedResendApiKey = resendApiKey || (await secrets.get('resend.apiKey')) || undefined;
+      if (!resolvedResendApiKey) {
         return {
           success: false,
           error: 'Resend API-Key fehlt. Bitte geben Sie einen gültigen API-Key ein.',
@@ -977,7 +977,7 @@ export const registerIpcHandlers = (
       }
 
       providerConfig = {
-        apiKey: resendApiKey,
+        apiKey: resolvedResendApiKey,
       } as ResendConfig;
     }
 

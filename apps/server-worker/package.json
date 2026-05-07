@@ -1,0 +1,27 @@
+{
+  "name": "billme-server-worker",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --import tsx dist/worker.js",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@billme/desktop-core": "workspace:*",
+    "@billme/desktop-data": "workspace:*",
+    "@billme/desktop-services": "workspace:*",
+    "@billme/server-core": "workspace:*",
+    "@billme/server-data": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "tsx": "^4.20.5",
+    "typescript": "~5.8.3"
+  }
+}

@@ -32,25 +32,34 @@ import { startPortalDecisionPolling } from './portalDecisionPolling';
 import { startDunningScheduler, stopDunningScheduler } from './dunningScheduler';
 import { startRecurringScheduler, stopRecurringScheduler } from './recurringScheduler';
 import { initAutoUpdater } from './updater';
+import { initNotificationPush } from './notifications';
 import { logger } from '../utils/logger';
+import { PRODUCT_PROFILE } from '../productProfile';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL || process.env.ELECTRON_RENDERER_URL);
+
+app.setName(PRODUCT_PROFILE.appName);
 
 let userDataPath: string | null = null;
 let portalSyncStop: (() => void) | null = null;
 let mainWindow: BrowserWindow | null = null;
 
+initNotificationPush(() => mainWindow);
+
 const createWindow = async () => {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: 1024,
+    minHeight: 640,
     frame: false,
     titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(appDir, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: !process.env.BILLME_E2E,
     },
   });
   mainWindow = win;
@@ -70,10 +79,40 @@ const createWindow = async () => {
   });
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || process.env.ELECTRON_RENDERER_URL;
+  const isAllowedNavigation = (targetUrl: string): boolean => {
+    try {
+      const parsed = new URL(targetUrl);
+      if (devServerUrl) {
+        const allowedOrigin = new URL(devServerUrl).origin;
+        return parsed.origin === allowedOrigin;
+      }
+      return parsed.protocol === 'file:';
+    } catch {
+      return false;
+    }
+  };
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedNavigation(url)) {
+      return { action: 'allow' };
+    }
+    logger.warn('Security', 'Blocked window.open navigation', { url });
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (isAllowedNavigation(url)) {
+      return;
+    }
+    event.preventDefault();
+    logger.warn('Security', 'Blocked unexpected navigation', { url });
+  });
+
   if (devServerUrl) {
     console.log('Loading renderer from', devServerUrl);
     await win.loadURL(devServerUrl);
-    win.webContents.openDevTools({ mode: 'detach' });
+    if (!process.env.BILLME_E2E) {
+      win.webContents.openDevTools({ mode: 'detach' });
+    }
     win.webContents.once('did-finish-load', () => {
       console.log('Renderer did-finish-load', win.webContents.getURL());
     });
@@ -87,7 +126,7 @@ const createWindow = async () => {
 
 const requireDb = () => {
   if (!userDataPath) throw new Error('userDataPath not initialized');
-  return initDb(userDataPath);
+  return initDb(userDataPath, { dbFileName: PRODUCT_PROFILE.dbFileName });
 };
 
 registerIpcHandlers(ipcMain, {
@@ -109,89 +148,97 @@ process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) =>
 
 process.on('uncaughtException', (error: Error) => {
   logger.error('UncaughtException', 'Uncaught exception', error);
-  // Don't exit - let app handle it gracefully
+  // Attempt a graceful renderer reload; if the window is gone or the error is
+  // unrecoverable the app will quit after a short delay.
+  try {
+    mainWindow?.webContents.reload();
+  } catch {
+    // window may already be destroyed
+  }
+  setTimeout(() => app.quit(), 3000);
 });
 
 app.whenReady().then(async () => {
-  if (isDev) {
+  const e2eUserDataDir = process.env.BILLME_E2E_USER_DATA_DIR;
+  if (e2eUserDataDir) {
+    app.setPath('userData', e2eUserDataDir);
+    app.setPath('cache', process.env.BILLME_E2E_CACHE_DIR ?? path.join(e2eUserDataDir, 'cache'));
+  } else if (isDev) {
     // In some dev environments, the default userData/cache paths may be unwritable.
-    const devBase = path.join(app.getPath('temp'), 'billme-dev');
+    const devBase = path.join(app.getPath('temp'), `${PRODUCT_PROFILE.backupPrefix}-dev`);
     app.setPath('userData', devBase);
     app.setPath('cache', path.join(devBase, 'cache'));
   }
 
   userDataPath = app.getPath('userData');
-  const db = initDb(userDataPath);
+  const db = initDb(userDataPath, { dbFileName: PRODUCT_PROFILE.dbFileName });
 
-  // Dev convenience: seed initial data if DB is empty.
-  const invoiceCountRow = db.prepare('SELECT COUNT(*) as c FROM invoices').get() as { c: number };
-  if (invoiceCountRow.c === 0) {
-    for (const inv of MOCK_INVOICES) {
-      try {
-        upsertInvoice(db, inv, 'seed');
-      } catch (error) {
-        logger.debug('Seed', 'Failed to seed invoice', { invoiceId: inv.id, error: String(error) });
+  if (isDev) {
+    // Dev convenience: seed initial data if DB is empty.
+    const invoiceCountRow = db.prepare('SELECT COUNT(*) as c FROM invoices').get() as { c: number };
+    if (invoiceCountRow.c === 0) {
+      for (const inv of MOCK_INVOICES) {
+        try {
+          upsertInvoice(db, inv, 'seed');
+        } catch (error) {
+          logger.debug('Seed', 'Failed to seed invoice', { invoiceId: inv.id, error: String(error) });
+        }
       }
     }
-  }
 
-  const offerCountRow = db.prepare('SELECT COUNT(*) as c FROM offers').get() as { c: number };
-  if (offerCountRow.c === 0) {
-    // seed offers: none for now
-  }
-
-  const clientCountRow = db.prepare('SELECT COUNT(*) as c FROM clients').get() as { c: number };
-  if (clientCountRow.c === 0) {
-    for (const c of MOCK_CLIENTS) {
-      try {
-        upsertClient(db, c);
-      } catch (error) {
-        logger.debug('Seed', 'Failed to seed client', { clientId: c.id, error: String(error) });
+    const clientCountRow = db.prepare('SELECT COUNT(*) as c FROM clients').get() as { c: number };
+    if (clientCountRow.c === 0) {
+      for (const c of MOCK_CLIENTS) {
+        try {
+          upsertClient(db, c);
+        } catch (error) {
+          logger.debug('Seed', 'Failed to seed client', { clientId: c.id, error: String(error) });
+        }
       }
     }
-  }
 
-  const articleCountRow = db.prepare('SELECT COUNT(*) as c FROM articles').get() as { c: number };
-  if (articleCountRow.c === 0) {
-    for (const a of MOCK_ARTICLES) {
-      try {
-        upsertArticle(db, a);
-      } catch (error) {
-        logger.debug('Seed', 'Failed to seed article', { articleId: a.id, error: String(error) });
+    const articleCountRow = db.prepare('SELECT COUNT(*) as c FROM articles').get() as { c: number };
+    if (articleCountRow.c === 0) {
+      for (const a of MOCK_ARTICLES) {
+        try {
+          upsertArticle(db, a);
+        } catch (error) {
+          logger.debug('Seed', 'Failed to seed article', { articleId: a.id, error: String(error) });
+        }
       }
     }
-  }
 
-  const accountCountRow = db.prepare('SELECT COUNT(*) as c FROM accounts').get() as { c: number };
-  if (accountCountRow.c === 0) {
-    for (const acc of MOCK_ACCOUNTS) {
-      try {
-        upsertAccount(db, acc);
-      } catch (error) {
-        logger.debug('Seed', 'Failed to seed account', { accountId: acc.id, error: String(error) });
+    const accountCountRow = db.prepare('SELECT COUNT(*) as c FROM accounts').get() as { c: number };
+    if (accountCountRow.c === 0) {
+      for (const acc of MOCK_ACCOUNTS) {
+        try {
+          upsertAccount(db, acc);
+        } catch (error) {
+          logger.debug('Seed', 'Failed to seed account', { accountId: acc.id, error: String(error) });
+        }
       }
     }
-  }
 
-  const recurringCountRow = db.prepare('SELECT COUNT(*) as c FROM recurring_profiles').get() as {
-    c: number;
-  };
-  if (recurringCountRow.c === 0) {
-    for (const p of MOCK_RECURRING_PROFILES) {
-      try {
-        upsertRecurringProfile(db, p);
-      } catch (error) {
-        logger.debug('Seed', 'Failed to seed recurring profile', { profileId: p.id, error: String(error) });
+    const recurringCountRow = db.prepare('SELECT COUNT(*) as c FROM recurring_profiles').get() as {
+      c: number;
+    };
+    if (recurringCountRow.c === 0) {
+      for (const p of MOCK_RECURRING_PROFILES) {
+        try {
+          upsertRecurringProfile(db, p);
+        } catch (error) {
+          logger.debug('Seed', 'Failed to seed recurring profile', { profileId: p.id, error: String(error) });
+        }
       }
     }
-  }
 
-  const settingsRow = db.prepare('SELECT 1 FROM settings WHERE id = 1').get() as { 1: 1 } | undefined;
-  if (!settingsRow) {
-    try {
-      setSettings(db, MOCK_SETTINGS);
-    } catch (error) {
-      logger.debug('Seed', 'Failed to seed settings', { error: String(error) });
+    const settingsRow = db.prepare('SELECT 1 FROM settings WHERE id = 1').get() as { 1: 1 } | undefined;
+    if (!settingsRow) {
+      try {
+        setSettings(db, MOCK_SETTINGS);
+      } catch (error) {
+        logger.debug('Seed', 'Failed to seed settings', { error: String(error) });
+      }
     }
   }
 
@@ -225,7 +272,7 @@ app.whenReady().then(async () => {
     const poller = startPortalDecisionPolling({
       requireDb,
       intervalMs: 60_000,
-      logger: console,
+      logger,
     });
     portalSyncStop = poller.stop;
   } catch (e) {

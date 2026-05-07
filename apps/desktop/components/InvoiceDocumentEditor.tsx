@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { AppSettings, Article, Client, Invoice, InvoiceElement, InvoiceItem } from '../types';
 import { CanvasElement } from './CanvasElement';
 import { INITIAL_INVOICE_TEMPLATE, INITIAL_OFFER_TEMPLATE, A4_WIDTH_PX, A4_HEIGHT_PX } from '../constants';
-import { ArrowLeft, Save, Plus, Trash2, Calendar, User, FileText, Calculator, Euro } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Calendar, User, FileText, Calculator, Euro, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { MOCK_SETTINGS } from '../data/mockData';
 import { ElementType } from '../types';
 import { getPreviewElements } from '../utils/documentPreview';
@@ -13,13 +13,12 @@ import { useClientsQuery } from '../hooks/useClients';
 import { useArticlesQuery } from '../hooks/useArticles';
 import { useProjectsQuery } from '../hooks/useProjects';
 import { formatAddressMultiline } from '../utils/formatters';
+import { useUiStore } from '../state/uiStore';
 import {
   calculateInvoiceTaxSnapshot,
-  getInvoiceTaxExemptionReason,
-  getInvoiceTaxModeDefinition,
   INVOICE_TAX_MODE_DEFINITIONS,
   resolveInvoiceTaxMode,
-} from '../services/taxMode';
+} from '@billme/server-core/services';
 
 interface InvoiceDocumentEditorProps {
   invoice: Invoice;
@@ -41,20 +40,20 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   onSave,
   onCancel,
 }) => {
-  const { data: settingsFromDb } = useSettingsQuery();
-  const effectiveSettings = settingsFromDb ?? MOCK_SETTINGS;
   const currencyFormatter = useMemo(() => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }), []);
   const formatCurrency = (amount: number) => currencyFormatter.format(amount);
-  const [formData, setFormData] = useState<Invoice>({
-    ...invoice,
-    taxMode: resolveInvoiceTaxMode(invoice.taxMode, effectiveSettings),
-  });
+  const [formData, setFormData] = useState<Invoice>(invoice);
+  const sidebarCollapsed = useUiStore((s) => s.editorSidebarCollapsed);
+  const setSidebarCollapsed = useUiStore((s) => s.setEditorSidebarCollapsed);
   const { data: clients = [] } = useClientsQuery();
   const { data: articles = [] } = useArticlesQuery();
+  const { data: settingsFromDb } = useSettingsQuery();
+  const effectiveSettings = settingsFromDb ?? MOCK_SETTINGS;
   const { data: activeTemplate } = useActiveTemplateQuery(templateType);
   const effectiveTemplate: InvoiceElement[] =
     (activeTemplate?.elements as InvoiceElement[] | undefined) ?? (templateType === 'offer' ? INITIAL_OFFER_TEMPLATE : INITIAL_INVOICE_TEMPLATE);
   const [selectedClientId, setSelectedClientId] = useState<string>(invoice.clientId ?? '');
+  const [isNumberLocked, setIsNumberLocked] = useState<boolean>(mode === 'edit');
   const [articleToAddId, setArticleToAddId] = useState<string>('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const { data: projects = [] } = useProjectsQuery(
@@ -97,7 +96,7 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
           ...formData,
           items: [
               ...formData.items,
-              { description: 'Neue Position', quantity: 1, price: 0, total: 0, category: defaultCategory }
+              { description: '', quantity: 1, price: 0, total: 0, category: defaultCategory }
            ]
        });
    };
@@ -142,13 +141,6 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   };
 
   useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      taxMode: resolveInvoiceTaxMode(prev.taxMode, effectiveSettings),
-    }));
-  }, [effectiveSettings]);
-
-  useEffect(() => {
     if (!selectedClientId) {
       setFormData((prev) => ({ ...prev, projectId: undefined }));
       return;
@@ -189,34 +181,30 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
       });
   };
 
-  const totals = calculateInvoiceTaxSnapshot(
-    {
-      items: formData.items,
-      taxMode: formData.taxMode,
-      taxMeta: formData.taxMeta,
-    },
-    effectiveSettings,
+  const taxSnapshot = useMemo(
+    () =>
+      calculateInvoiceTaxSnapshot(
+        {
+          items: formData.items,
+          taxMode: formData.taxMode,
+          taxMeta: formData.taxMeta,
+        },
+        effectiveSettings,
+      ),
+    [formData.items, formData.taxMeta, formData.taxMode, effectiveSettings],
   );
-  const taxModeDefinition = getInvoiceTaxModeDefinition(formData.taxMode);
-  const defaultExemptionReason = getInvoiceTaxExemptionReason(formData.taxMode, formData.taxMeta);
-  const validationErrors = useMemo(() => {
-    const errors: string[] = [];
-    if (taxModeDefinition.requiresBuyerVatId && !formData.taxMeta?.buyerVatId?.trim()) {
-      errors.push('Für diesen Steuermodus ist eine USt-IdNr. des Kunden erforderlich.');
-    }
-    if (
-      taxModeDefinition.requiresExemptionReason &&
-      !(formData.taxMeta?.exemptionReasonOverride?.trim() || defaultExemptionReason?.trim())
-    ) {
-      errors.push('Für diesen Steuermodus ist ein Steuerhinweis/Befreiungsgrund erforderlich.');
-    }
-    return errors;
-  }, [taxModeDefinition, formData.taxMeta, defaultExemptionReason]);
+  const totals = {
+    net: taxSnapshot.netAmount,
+    vat: taxSnapshot.vatAmount,
+    gross: taxSnapshot.grossAmount,
+  };
 
   return (
     <div className="flex h-full w-full bg-[#f3f4f6] overflow-hidden">
         {/* Left Sidebar: Form Editor */}
-        <div className="w-[450px] flex flex-col bg-white border-r border-gray-200 h-full shadow-xl z-10">
+        <div
+          className={`flex flex-col bg-white border-r border-gray-200 h-full shadow-xl z-10 transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-[450px]'}`}
+        >
             {/* Header */}
             <div className="p-6 border-b border-gray-100 bg-white">
                 <button 
@@ -229,6 +217,11 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                   {templateType === 'offer' ? 'Angebot' : 'Rechnung'} {mode === 'create' ? 'erstellen' : 'bearbeiten'}
                 </h2>
                 <p className="text-gray-500 text-sm">{formData.number}</p>
+                {saveError ? (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    {saveError}
+                  </div>
+                ) : null}
             </div>
 
             {/* Scrollable Form Content */}
@@ -242,13 +235,38 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">Rechnungs-Nr.</label>
-                            <input 
-                                type="text" 
-                                value={formData.number}
-                                onChange={e => setFormData({...formData, number: e.target.value})}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
-                            />
+                            <label className="block text-xs font-bold text-gray-500 mb-1">
+                                {templateType === 'offer' ? 'Angebots-Nr.' : 'Rechnungs-Nr.'}
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={formData.number}
+                                    readOnly={isNumberLocked}
+                                    onChange={e => setFormData({...formData, number: e.target.value})}
+                                    className={`w-full bg-gray-50 border rounded-xl p-2.5 text-sm font-medium outline-none transition-colors ${isNumberLocked ? 'border-gray-200 text-gray-400 cursor-not-allowed pr-10' : 'border-warning focus:ring-2 focus:ring-warning'}`}
+                                />
+                                {mode === 'edit' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (isNumberLocked) {
+                                                const ok = window.confirm(
+                                                    'Achtung: Die manuelle Änderung der Nummer kann die GoBD-konforme Nummerierung gefährden.\n\nNur fortfahren, wenn Sie sicher sind.'
+                                                );
+                                                if (ok) setIsNumberLocked(false);
+                                            } else {
+                                                setIsNumberLocked(true);
+                                            }
+                                        }}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors"
+                                        title={isNumberLocked ? 'Nummer bearbeiten (GoBD-Warnung)' : 'Nummer sperren'}
+                                        aria-label={isNumberLocked ? 'Nummer entsperren' : 'Nummer sperren'}
+                                    >
+                                        {isNumberLocked ? <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> : <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1">Datum</label>
@@ -277,75 +295,6 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                                 className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
                             />
                         </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">Steuerbehandlung</label>
-                        <select
-                            value={formData.taxMode}
-                            onChange={e => {
-                                setSaveError(null);
-                                setFormData({...formData, taxMode: e.target.value as Invoice['taxMode']});
-                            }}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
-                        >
-                            {INVOICE_TAX_MODE_DEFINITIONS.map((mode) => (
-                                <option key={mode.mode} value={mode.mode}>
-                                    {mode.label}
-                                </option>
-                            ))}
-                        </select>
-                        <p className="mt-2 text-xs text-gray-500">{taxModeDefinition.description}</p>
-                        {(taxModeDefinition.requiresBuyerVatId || taxModeDefinition.requiresExemptionReason) && (
-                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-                                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-800">Pflichtangaben</p>
-                                {taxModeDefinition.requiresBuyerVatId && (
-                                    <div>
-                                        <label className="block text-[11px] font-bold text-amber-900 mb-1">USt-IdNr. Kunde</label>
-                                        <input
-                                            type="text"
-                                            value={formData.taxMeta?.buyerVatId ?? ''}
-                                            onChange={(e) =>
-                                                setFormData({
-                                                    ...formData,
-                                                    taxMeta: {
-                                                        ...formData.taxMeta,
-                                                        buyerVatId: e.target.value,
-                                                    },
-                                                })
-                                            }
-                                            placeholder="z.B. DE123456789"
-                                            className="w-full bg-white border border-amber-200 rounded-lg p-2 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
-                                        />
-                                    </div>
-                                )}
-                                {taxModeDefinition.requiresExemptionReason && (
-                                    <div>
-                                        <label className="block text-[11px] font-bold text-amber-900 mb-1">Steuerhinweis / Befreiungsgrund</label>
-                                        <textarea
-                                            rows={2}
-                                            value={formData.taxMeta?.exemptionReasonOverride ?? defaultExemptionReason ?? ''}
-                                            onChange={(e) =>
-                                                setFormData({
-                                                    ...formData,
-                                                    taxMeta: {
-                                                        ...formData.taxMeta,
-                                                        exemptionReasonOverride: e.target.value,
-                                                    },
-                                                })
-                                            }
-                                            className="w-full bg-white border border-amber-200 rounded-lg p-2 text-sm font-medium focus:ring-2 focus:ring-accent outline-none resize-none"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        {validationErrors.length > 0 && (
-                            <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2">
-                                {validationErrors.map((err) => (
-                                    <p key={err} className="text-xs font-semibold text-red-700">{err}</p>
-                                ))}
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -414,6 +363,27 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                             placeholder="Straße, PLZ, Stadt..."
                             className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none resize-none"
                         />
+                        <div className="mt-4 grid grid-cols-1 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Steuer-Modell</label>
+                            <select
+                              value={formData.taxMode ?? resolveInvoiceTaxMode(undefined, effectiveSettings)}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  taxMode: e.target.value as Invoice['taxMode'],
+                                }))
+                              }
+                              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
+                            >
+                              {INVOICE_TAX_MODE_DEFINITIONS.map((definition) => (
+                                <option key={definition.mode} value={definition.mode}>
+                                  {definition.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                     </div>
                 </div>
 
@@ -425,26 +395,35 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                             Positionen
                         </h3>
                         <div className="flex items-center gap-2">
-                            <select
-                                value={articleToAddId}
-                                onChange={(e) => {
-                                    const id = e.target.value;
-                                    setArticleToAddId(id);
-                                    const article = articles.find((a) => a.id === id);
-                                    if (article) {
-                                        handleAddArticleItem(article);
-                                        setArticleToAddId('');
-                                    }
-                                }}
-                                className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-accent"
-                            >
-                                <option value="">+ Artikel</option>
-                                {articles.map((a) => (
-                                    <option key={a.id} value={a.id}>
-                                        {a.title}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="flex items-center gap-1">
+                                <select
+                                    value={articleToAddId}
+                                    onChange={(e) => setArticleToAddId(e.target.value)}
+                                    className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-accent"
+                                >
+                                    <option value="">Artikel wählen...</option>
+                                    {articles.map((a) => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.title}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    disabled={!articleToAddId}
+                                    onClick={() => {
+                                        const article = articles.find((a) => a.id === articleToAddId);
+                                        if (article) {
+                                            handleAddArticleItem(article);
+                                            setArticleToAddId('');
+                                        }
+                                    }}
+                                    className="text-xs font-bold bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed text-gray-800 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+                                    title="Artikel zur Rechnung hinzufügen"
+                                >
+                                    <Plus size={12} /> Hinzufügen
+                                </button>
+                            </div>
                             <button 
                                 onClick={handleAddItem}
                                 className="text-xs font-bold bg-black text-accent px-2 py-1 rounded hover:bg-gray-800 transition-colors flex items-center gap-1"
@@ -522,15 +501,15 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                     <div className="bg-gray-50 rounded-xl p-4 space-y-2 border border-gray-100 animate-enter" style={{ animationDelay: '400ms' }}>
                         <div className="flex justify-between text-sm text-gray-500">
                             <span>Netto</span>
-                            <span>{formatCurrency(totals.netAmount)}</span>
+                            <span>{formatCurrency(totals.net)}</span>
                         </div>
                         <div className="flex justify-between text-sm text-gray-500">
-                            <span>USt ({totals.vatRateApplied}%)</span>
-                            <span>{formatCurrency(totals.vatAmount)}</span>
+                            <span>{taxSnapshot.label ?? 'USt'} ({taxSnapshot.vatRateApplied}%)</span>
+                            <span>{formatCurrency(totals.vat)}</span>
                         </div>
                         <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-2 mt-2">
                             <span>Gesamtbetrag</span>
-                            <span>{formatCurrency(totals.grossAmount)}</span>
+                            <span>{formatCurrency(totals.gross)}</span>
                         </div>
                     </div>
                 </div>
@@ -538,15 +517,17 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
 
             {/* Actions */}
             <div className="p-6 border-t border-gray-200 bg-white animate-enter" style={{ animationDelay: '450ms' }}>
-                {saveError && <p className="mb-3 text-xs font-bold text-red-600">{saveError}</p>}
                 <button
                     onClick={() => {
-                      if (validationErrors.length > 0) {
-                        setSaveError('Bitte ergänze die Pflichtangaben zur Steuerbehandlung.');
-                        return;
-                      }
                       setSaveError(null);
-                      onSave({ ...formData, taxSnapshot: totals, amount: totals.grossAmount });
+                      const resolvedTaxMode = resolveInvoiceTaxMode(formData.taxMode, effectiveSettings);
+                      const normalized: Invoice = {
+                        ...formData,
+                        taxMode: resolvedTaxMode,
+                        taxSnapshot,
+                        amount: taxSnapshot.grossAmount,
+                      };
+                      onSave(normalized);
                     }}
                     className="w-full bg-accent text-black font-bold py-3 rounded-xl hover:bg-accent-hover transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent/20 active:scale-95"
                 >
@@ -558,6 +539,14 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
 
         {/* Right Area: Live Preview */}
         <div className="flex-1 bg-[#555] overflow-auto flex justify-center p-8 relative">
+            {/* Sidebar toggle */}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="absolute top-4 left-4 z-10 w-9 h-9 bg-white/15 hover:bg-white/25 rounded-xl flex items-center justify-center text-white/70 hover:text-white transition-all"
+              title={sidebarCollapsed ? 'Seitenleiste einblenden' : 'Seitenleiste ausblenden'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
             <div className="flex flex-col items-center">
                 <div className="mb-4 text-white/50 text-xs font-medium uppercase tracking-wider flex items-center gap-2">
                     Live Vorschau

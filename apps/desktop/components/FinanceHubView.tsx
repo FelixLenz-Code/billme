@@ -1,60 +1,45 @@
-import { Button } from '@billme/ui';
-import React from 'react';
-import { ArrowRight, BarChart3, ReceiptText, Wallet } from 'lucide-react';
-import { useNavigate } from '@tanstack/react-router';
+import React, { useState } from 'react';
+import { BarChart3, Wallet, ReceiptText } from 'lucide-react';
+import { StatisticsView } from './StatisticsView';
+import { AccountsView } from './AccountsView';
+import { EurView } from './EurView';
+
+type Tab = 'statistics' | 'accounts' | 'eur';
+
+const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: 'statistics', label: 'Statistiken', icon: <BarChart3 size={16} /> },
+  { id: 'accounts', label: 'Konten & Transaktionen', icon: <Wallet size={16} /> },
+  { id: 'eur', label: 'EÜR', icon: <ReceiptText size={16} /> },
+];
 
 export const FinanceHubView: React.FC = () => {
-  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<Tab>('statistics');
 
   return (
-    <div className="bg-white rounded-[2.5rem] p-6 min-h-full shadow-sm">
-      <div className="mb-8">
-        <h2 className="text-2xl font-black text-gray-900">Finanzen</h2>
-        <p className="text-sm text-gray-500 mt-1">Konten, Transaktionen und Auswertungen.</p>
+    <div className="flex flex-col gap-6 h-full">
+      {/* Sub-nav */}
+      <div className="bg-white rounded-[2.5rem] p-4 shadow-sm flex items-center gap-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+              activeTab === tab.id
+                ? 'bg-black text-white'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <button
-          onClick={() => navigate({ to: '/accounts' })}
-          className="text-left p-6 rounded-3xl border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-black text-accent flex items-center justify-center">
-              <Wallet size={22} />
-            </div>
-            <ArrowRight className="text-gray-400" />
-          </div>
-          <div className="text-lg font-black text-gray-900">Konten &amp; Transaktionen</div>
-          <div className="text-sm text-gray-500 mt-1">CSV-Import, Zuordnung zu Rechnungen, Kontenverwaltung.</div>
-        </button>
-
-        <button
-          onClick={() => navigate({ to: '/statistics' })}
-          className="text-left p-6 rounded-3xl border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-black text-accent flex items-center justify-center">
-              <BarChart3 size={22} />
-            </div>
-            <ArrowRight className="text-gray-400" />
-          </div>
-          <div className="text-lg font-black text-gray-900">Statistiken</div>
-          <div className="text-sm text-gray-500 mt-1">Umsätze, Kategorien, Zeiträume, Trends.</div>
-        </button>
-
-        <button
-          onClick={() => navigate({ to: '/eur' })}
-          className="text-left p-6 rounded-3xl border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-black text-accent flex items-center justify-center">
-              <ReceiptText size={22} />
-            </div>
-            <ArrowRight className="text-gray-400" />
-          </div>
-          <div className="text-lg font-black text-gray-900">EÜR</div>
-          <div className="text-sm text-gray-500 mt-1">Anlage EÜR Kategorien, Klassifizierung und Export.</div>
-        </button>
+      {/* Content */}
+      <div className="flex-1 min-h-0">
+        {activeTab === 'statistics' && <StatisticsView />}
+        {activeTab === 'accounts' && <AccountsView />}
+        {activeTab === 'eur' && <EurView />}
       </div>
     </div>
   );

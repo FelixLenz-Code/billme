@@ -1,0 +1,14 @@
+.git
+.gitignore
+node_modules
+**/node_modules
+.pnpm-store
+**/dist
+**/out
+**/coverage
+**/.wrangler
+**/.artifacts
+**/.test-logs
+test-results
+.codex
+pnpm-debug.log*

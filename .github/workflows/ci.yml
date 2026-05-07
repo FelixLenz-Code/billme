@@ -5,7 +5,11 @@ on:
     paths:
       - 'apps/**'
       - 'packages/**'
+      - 'tests/**'
+      - 'docker-compose.server-mode.yml'
+      - '.env.server-mode.example'
       - 'package.json'
+      - 'playwright.config.mjs'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/ci.yml'
@@ -13,7 +17,11 @@ on:
     paths:
       - 'apps/**'
       - 'packages/**'
+      - 'tests/**'
+      - 'docker-compose.server-mode.yml'
+      - '.env.server-mode.example'
       - 'package.json'
+      - 'playwright.config.mjs'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/ci.yml'
@@ -54,5 +62,66 @@ jobs:
       - name: Desktop build
         run: pnpm -C apps/desktop build
 
+      - name: Pro desktop typecheck
+        run: pnpm -C apps/pro-desktop typecheck
+
+      - name: Pro desktop tests
+        run: pnpm -C apps/pro-desktop test --run
+
+      - name: Pro desktop e-invoice conformance tests
+        run: pnpm -C apps/pro-desktop test:einvoice
+
+      - name: Pro desktop build
+        run: pnpm -C apps/pro-desktop build
+
       - name: Offer portal build
         run: pnpm -C apps/offer-portal build
+
+      - name: E2E smoke (desktop + pro)
+        run: pnpm test:e2e:smoke
+
+  e2e-server-smoke:
+    name: E2E smoke (server mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E smoke (server mode)
+        run: pnpm test:e2e:server:smoke
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-server-smoke
+          path: playwright-report
+          if-no-files-found: ignore
+
+      - name: Upload server-mode diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-mode-diagnostics-smoke
+          path: test-results/server-mode
+          if-no-files-found: ignore

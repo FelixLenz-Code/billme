@@ -105,6 +105,23 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [bulkDeleteReason, setBulkDeleteReason] = useState('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
+  // PDF path for "Öffnen" button in toast
+  const [pdfLastPath, setPdfLastPath] = useState<string | null>(null);
+
+  // Detail toolbar overflow menu
+  const [isToolbarOverflowOpen, setIsToolbarOverflowOpen] = useState(false);
+  const toolbarOverflowRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!isToolbarOverflowOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (toolbarOverflowRef.current && !toolbarOverflowRef.current.contains(e.target as Node)) {
+        setIsToolbarOverflowOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isToolbarOverflowOpen]);
+
   // Payments (Invoice detail)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
@@ -235,8 +252,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           setToastMessage('PDF wird erstellt...');
           setShowShareToast(true);
           const res = await ipc.pdf.export({ kind: documentType, id: selectedDocument.id });
-          setToastMessage(`PDF gespeichert: ${res.path}`);
-          setTimeout(() => setShowShareToast(false), 3500);
+          setToastMessage(`PDF gespeichert`);
+          setPdfLastPath(res.path);
+          setTimeout(() => setShowShareToast(false), 5000);
         } catch (e) {
           setToastMessage(`PDF Fehler: ${String(e)}`);
           setTimeout(() => setShowShareToast(false), 5000);
@@ -272,7 +290,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const handleOpenOfferLink = () => {
     const url = getOfferPublicUrl();
     if (!url) {
-      setToastMessage('Portal Base URL fehlt (Settings -> Portal)');
+      setToastMessage('Portal-URL fehlt – bitte in Einstellungen → Portal hinterlegen.');
       setShowShareToast(true);
       setTimeout(() => setShowShareToast(false), 4000);
       return;
@@ -341,10 +359,13 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   // --- Email Logic ---
   const handleOpenEmail = () => {
       if(!selectedDocument) return;
+      const companyName = settings.company?.name?.trim() || 'Ihr Unternehmen';
+      const contactPerson = settings.company?.owner?.trim();
+      const signature = contactPerson ? `${contactPerson}\n${companyName}` : companyName;
       setEmailData({
           to: selectedDocument.clientEmail,
           subject: `${documentType === 'invoice' ? 'Rechnung' : 'Angebot'} ${selectedDocument.number}`,
-          message: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${documentType === 'invoice' ? 'Ihre Rechnung' : 'Ihr Angebot'} ${selectedDocument.number}.\n\nMit freundlichen Grüßen,\nMustermann GmbH`
+          message: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${documentType === 'invoice' ? 'Ihre Rechnung' : 'Ihr Angebot'} ${selectedDocument.number}.\n\nMit freundlichen Grüßen,\n${signature}`
       });
       setIsEmailModalOpen(true);
   };
@@ -904,6 +925,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                   <div className="absolute top-8 right-8 bg-black text-accent px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 z-50 animate-in fade-in slide-in-from-top-2">
                       <Check size={16} />
                       <span className="text-sm font-bold">{toastMessage}</span>
+                      {pdfLastPath && toastMessage === 'PDF gespeichert' && (
+                        <button
+                          onClick={() => void ipc.shell.openPath({ path: pdfLastPath })}
+                          className="ml-2 text-xs font-bold underline underline-offset-2 opacity-80 hover:opacity-100 transition-opacity"
+                        >
+                          Öffnen
+                        </button>
+                      )}
                   </div>
               )}
 
@@ -932,9 +961,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                       </div>
                   </div>
 
-                  {/* Actions Toolbar */}
+                  {/* Actions Toolbar — tiered: primary → secondary → overflow */}
                   <div className="flex flex-wrap items-center gap-2">
-                      {/* Convert to Invoice - Prominent action for accepted offers */}
+                      {/* Convert to Invoice — prominent CTA for accepted offers */}
                       {documentType === 'offer' && selectedDocument.shareDecision === 'accepted' && (
                         <>
                           <Button
@@ -945,128 +974,138 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                             <ArrowRight size={16} />
                             In Rechnung umwandeln
                           </Button>
-                          <div className="w-px h-6 bg-gray-200 mx-1"></div>
+                          <div className="w-px h-6 bg-gray-200 mx-1" />
                         </>
                       )}
+
+                      {/* PRIMARY: labeled action buttons */}
                       <button
                         onClick={() => onEditInvoice(selectedDocument, documentType)}
                         className="h-10 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full font-bold text-xs transition-colors flex items-center gap-2"
                       >
-                          Bearbeiten
+                        <Edit3 size={14} /> Bearbeiten
                       </button>
+                      <Button onClick={handleOpenEmail} size="md">
+                        <Mail size={16} /> Senden
+                      </Button>
+                      <button
+                        onClick={handleDownloadPdf}
+                        className="h-10 px-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full font-bold text-xs transition-colors flex items-center gap-2"
+                        title="PDF herunterladen"
+                      >
+                        <Download size={14} /> PDF
+                      </button>
+
+                      {/* SECONDARY: icon buttons */}
+                      <div className="w-px h-6 bg-gray-200 mx-1" />
+
                       {documentType === 'invoice' && selectedDocument.status === 'draft' && (
                         <button
                           onClick={handleFinalizeDraftInvoice}
                           className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
-                          title="Als gestellt markieren (Entwurf -> Offen)"
+                          title="Als gestellt markieren (Entwurf → Offen)"
                         >
                           <CheckCircle size={18} />
                         </button>
                       )}
+
                       {documentType === 'offer' && (
                         <>
-                          <div className="w-px h-6 bg-gray-200 mx-1"></div>
                           {!selectedDocument.shareToken ? (
                             <button
                               onClick={handlePublishOffer}
-                              className="h-10 px-4 bg-black text-accent rounded-full font-bold text-xs transition-colors flex items-center gap-2 hover:bg-gray-800"
+                              className="h-10 px-3 bg-black text-accent rounded-full font-bold text-xs transition-colors flex items-center gap-1.5 hover:bg-gray-800"
                               title="Öffentlichen Link erzeugen"
                             >
-                              <Link size={16} /> Veröffentlichen
+                              <Link size={14} /> Veröffentlichen
                             </button>
                           ) : (
                             <>
                               <button
-                              onClick={async () => {
-                                if (!selectedDocument.shareToken) return;
-                                const baseUrl = settings.portal.baseUrl?.trim();
-                                if (!baseUrl) {
-                                  setToastMessage('Portal Base URL fehlt (Settings → Portal)');
+                                onClick={async () => {
+                                  if (!selectedDocument.shareToken) return;
+                                  const baseUrl = settings.portal.baseUrl?.trim();
+                                  if (!baseUrl) {
+                                    setToastMessage('Portal-URL fehlt – bitte in Einstellungen → Portal hinterlegen.');
+                                    setShowShareToast(true);
+                                    setTimeout(() => setShowShareToast(false), 4000);
+                                    return;
+                                  }
+                                  try {
+                                    await navigator.clipboard.writeText(`${baseUrl.replace(/\/+$/, '')}/offers/${selectedDocument.shareToken}`);
+                                    setToastMessage('Link kopiert!');
+                                  } catch (error) {
+                                    setToastMessage(`Kopieren fehlgeschlagen: ${String(error)}`);
+                                  }
                                   setShowShareToast(true);
-                                  setTimeout(() => setShowShareToast(false), 4000);
-                                  return;
-                                }
-                                try {
-                                  await navigator.clipboard.writeText(`${baseUrl.replace(/\/+$/, '')}/offers/${selectedDocument.shareToken}`);
-                                  setToastMessage('Link kopiert!');
-                                } catch (error) {
-                                  setToastMessage(`Kopieren fehlgeschlagen: ${String(error)}`);
-                                }
-                                setShowShareToast(true);
-                                setTimeout(() => setShowShareToast(false), 2500);
-                              }}
-                              className="h-10 px-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full font-bold text-xs transition-colors flex items-center gap-2"
-                              title="Link kopieren"
-                            >
-                              <Link size={16} /> Link
-                            </button>
+                                  setTimeout(() => setShowShareToast(false), 2500);
+                                }}
+                                className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
+                                title="Link kopieren"
+                              >
+                                <Link size={18} />
+                              </button>
                               <button
-                              onClick={handleOpenOfferLink}
-                              className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
-                              title="Link im Browser öffnen"
-                            >
-                              <ExternalLink size={18} />
-                            </button>
+                                onClick={handleOpenOfferLink}
+                                className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
+                                title="Im Browser öffnen"
+                              >
+                                <ExternalLink size={18} />
+                              </button>
+                              <button
+                                onClick={handleSyncOfferDecision}
+                                className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
+                                title="Portal-Status synchronisieren"
+                              >
+                                <RefreshCw size={18} />
+                              </button>
                             </>
-                          )}
-                          {selectedDocument.shareToken && (
-                            <button
-                              onClick={handleSyncOfferDecision}
-                              className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
-                              title="Portal-Status synchronisieren"
-                            >
-                              <RefreshCw size={18} />
-                            </button>
                           )}
                         </>
                       )}
-                      <div className="w-px h-6 bg-gray-200 mx-1"></div>
-                      <button 
-                        onClick={handleDownloadPdf}
-                        className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
-                        title="PDF Herunterladen"
-                      >
-                          <Download size={18} />
-                      </button>
-                      <button 
-                        className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
-                        title="Drucken"
-                        onClick={() => {
-                          if (!selectedDocument) return;
-                          void (async () => {
-                            try {
-                              setToastMessage('PDF wird erstellt...');
-                              setShowShareToast(true);
-                              const res = await ipc.pdf.export({
-                                kind: documentType,
-                                id: selectedDocument.id,
-                              });
-                              await ipc.shell.openPath({ path: res.path });
-                              setToastMessage('PDF geöffnet');
-                              setTimeout(() => setShowShareToast(false), 2500);
-                            } catch (e) {
-                              setToastMessage(`PDF Fehler: ${String(e)}`);
-                              setTimeout(() => setShowShareToast(false), 5000);
-                            }
-                          })();
-                        }}
-                      >
-                          <Printer size={18} />
-                      </button>
-                      <button 
-                        onClick={handleSharePaymentLink}
-                        className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
-                        title="Link kopieren"
-                      >
-                          <Share2 size={18} />
-                      </button>
-                      <Button
-                        onClick={handleOpenEmail}
-                        size="md"
-                      >
-                          <Mail size={16} />
-                          Senden
-                      </Button>
+
+                      {/* OVERFLOW: rarely-used actions */}
+                      <div ref={toolbarOverflowRef} className="relative">
+                        <button
+                          onClick={() => setIsToolbarOverflowOpen((v) => !v)}
+                          className="h-10 w-10 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-full flex items-center justify-center transition-colors"
+                          title="Weitere Aktionen"
+                        >
+                          <MoreHorizontal size={18} />
+                        </button>
+                        {isToolbarOverflowOpen && (
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl p-1.5 z-50 min-w-[180px]">
+                            <button
+                              onClick={() => {
+                                setIsToolbarOverflowOpen(false);
+                                if (!selectedDocument) return;
+                                void (async () => {
+                                  try {
+                                    setToastMessage('PDF wird erstellt...');
+                                    setShowShareToast(true);
+                                    const res = await ipc.pdf.export({ kind: documentType, id: selectedDocument.id });
+                                    await ipc.shell.openPath({ path: res.path });
+                                    setToastMessage('PDF geöffnet');
+                                    setTimeout(() => setShowShareToast(false), 2500);
+                                  } catch (e) {
+                                    setToastMessage(`PDF Fehler: ${String(e)}`);
+                                    setTimeout(() => setShowShareToast(false), 5000);
+                                  }
+                                })();
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-xl flex items-center gap-2 transition-colors"
+                            >
+                              <Printer size={14} /> Drucken / PDF öffnen
+                            </button>
+                            <button
+                              onClick={() => { setIsToolbarOverflowOpen(false); handleSharePaymentLink(); }}
+                              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-xl flex items-center gap-2 transition-colors"
+                            >
+                              <Share2 size={14} /> Zahlungslink kopieren
+                            </button>
+                          </div>
+                        )}
+                      </div>
                   </div>
               </div>
 
@@ -1184,7 +1223,16 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                           )}
                           <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                <div className={`w-2 h-2 rounded-full ${selectedDocument.status === 'paid' ? 'bg-success' : 'bg-gray-300'}`}></div>
-                               {selectedDocument.status === 'paid' ? 'Bezahlt am 28.10.2023' : 'Noch nicht bezahlt'}
+                               {selectedDocument.status === 'paid'
+                                 ? (() => {
+                                     const lastPayment = (selectedDocument.payments ?? [])
+                                       .slice()
+                                       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
+                                     return lastPayment
+                                       ? `Bezahlt am ${formatDate(lastPayment.date)}`
+                                       : 'Bezahlt';
+                                   })()
+                                 : 'Noch nicht bezahlt'}
                           </div>
                           <div className="mt-3 border-t border-gray-100 pt-3">
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Steuerbehandlung</p>
@@ -1480,6 +1528,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           <div className="absolute top-8 right-8 bg-black text-accent px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 z-50 animate-in fade-in slide-in-from-top-2">
               <Check size={16} />
               <span className="text-sm font-bold">{toastMessage}</span>
+              {pdfLastPath && toastMessage === 'PDF gespeichert' && (
+                <button
+                  onClick={() => void ipc.shell.openPath({ path: pdfLastPath })}
+                  className="ml-2 text-xs font-bold underline underline-offset-2 opacity-80 hover:opacity-100 transition-opacity"
+                >
+                  Öffnen
+                </button>
+              )}
           </div>
       )}
 
@@ -1516,15 +1572,18 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
            </div>
 
            <div className="flex gap-2">
-                {(['all', 'open', 'paid', 'overdue'] as const).map(s => (
-                    <button 
-                        key={s}
-                        onClick={() => setFilter(s)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filter === s ? 'bg-black text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                    >
-                        {s === 'all' ? 'Alle' : s.charAt(0).toUpperCase() + s.slice(1)}
-                    </button>
-                ))}
+                {(['all', 'open', 'paid', 'overdue'] as const).map(s => {
+                    const labels: Record<string, string> = { all: 'Alle', open: 'Offen', paid: 'Bezahlt', overdue: 'Überfällig' };
+                    return (
+                        <button
+                            key={s}
+                            onClick={() => setFilter(s)}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filter === s ? 'bg-black text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        >
+                            {labels[s]}
+                        </button>
+                    );
+                })}
            </div>
         </div>
 
@@ -1715,7 +1774,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           )) : (
               <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                   <FileText size={48} className="mb-4 opacity-20" />
-                  <p className="font-medium">Keine {documentType === 'invoice' ? 'Rechnungen' : 'Angebote'} gefunden</p>
+                  <p className="font-bold text-gray-500">
+                    {searchTerm || filter !== 'all'
+                      ? `Keine Treffer für die aktuelle Suche oder Filterung`
+                      : `Noch keine ${documentType === 'invoice' ? 'Rechnungen' : 'Angebote'} vorhanden`}
+                  </p>
+                  {!searchTerm && filter === 'all' && (
+                    <p className="text-sm mt-1">Klicke auf das + oben rechts, um {documentType === 'invoice' ? 'eine Rechnung' : 'ein Angebot'} zu erstellen.</p>
+                  )}
               </div>
           )}
       </div>

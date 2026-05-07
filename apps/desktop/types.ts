@@ -163,6 +163,7 @@ export interface AppSettings {
     recentPaymentsLimit: number;
     topClientsLimit: number;
   };
+  onboardingCompleted?: boolean;
 }
 
 // --- Invoice Data Types ---
@@ -207,7 +208,7 @@ export interface InvoiceTaxSnapshot {
   vatAmount: number;
   netAmount: number;
   grossAmount: number;
-  einvoiceCategoryCode?: 'S' | 'E' | 'AE' | 'O';
+  einvoiceCategoryCode: 'S' | 'E' | 'AE' | 'O';
   label?: string;
 }
 
@@ -234,6 +235,9 @@ export interface Invoice {
   clientAddress?: string;
   billingAddressJson?: unknown;
   shippingAddressJson?: unknown;
+  taxMode?: InvoiceTaxMode;
+  taxMeta?: InvoiceTaxMeta;
+  taxSnapshot?: InvoiceTaxSnapshot;
   shareToken?: string | null;
   sharePublishedAt?: string | null;
   shareDecision?: 'accepted' | 'declined' | null;
@@ -245,9 +249,6 @@ export interface Invoice {
   date: string;
   dueDate: string;
   servicePeriod?: string; // Leistungsdatum/Zeitraum (Required for German invoices)
-  taxMode: InvoiceTaxMode;
-  taxMeta?: InvoiceTaxMeta;
-  taxSnapshot?: InvoiceTaxSnapshot;
   amount: number;
   status: InvoiceStatus;
   dunningLevel?: number; // 0 = None, 1 = Level 1, etc.

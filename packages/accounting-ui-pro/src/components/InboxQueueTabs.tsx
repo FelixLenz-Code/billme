@@ -1,0 +1,30 @@
+import { InboxQueueKey, inboxQueueLabels } from '../domain/selectors';
+
+interface InboxQueueTabsProps {
+  activeQueue: InboxQueueKey;
+  counts: Record<InboxQueueKey, number>;
+  onChange: (queue: InboxQueueKey) => void;
+}
+
+export default function InboxQueueTabs({ activeQueue, counts, onChange }: InboxQueueTabsProps) {
+  const mainQueues: InboxQueueKey[] = ['all', 'incomplete', 'review', 'approval', 'posted', 'errors'];
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {mainQueues.map((queue) => (
+        <button
+          key={queue}
+          onClick={() => onChange(queue)}
+          className={`h-7 px-3 rounded-full text-xs font-bold border transition-colors ${
+            activeQueue === queue
+              ? 'bg-black text-white border-black'
+              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          {inboxQueueLabels[queue]} <span className="opacity-70">{counts[queue] ?? 0}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+

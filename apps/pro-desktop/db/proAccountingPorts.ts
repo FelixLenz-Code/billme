@@ -1,0 +1,77 @@
+import type Database from 'better-sqlite3';
+import type {
+  ProAccountingCatalogRepository,
+  ProAccountingRepository,
+  ProWorkflowRepository,
+} from '@billme/server-core';
+import {
+  buildDatevRows,
+  dispatchDraftAction,
+  ensureProAccountingSeedData,
+  getAccountingHealth,
+  getBilanzReport,
+  getDraftByTransactionId,
+  getGuvReport,
+  getLedgerBalances,
+  getSusaReport,
+  getVatSummary,
+  insertDatevExport,
+  listBankTransactions,
+  listDatevExports,
+  listJournalEntries,
+  postDraft,
+  reverseJournalEntry,
+  saveDraft,
+  validateTaxCompliance,
+} from './proAccountingRepo';
+import { listProWorkflowEntries, upsertProWorkflowEntry } from './proWorkflowRepo';
+import { getLedgerAccountStats, listLedgerAccounts } from './ledgerAccountsRepo';
+import {
+  deleteAccountSuggestionRule,
+  listAccountSuggestionRules,
+  upsertAccountSuggestionRule,
+} from './accountSuggestionRulesRepo';
+import { listTaxCaseAccountMappings, listTaxCases, upsertTaxCaseAccountMapping } from './taxCasesRepo';
+
+export const createSqliteProAccountingRepository = (db: Database.Database): ProAccountingRepository => ({
+  listBankTransactions: async (scope) => listBankTransactions(db, scope),
+  getDraftByTransactionId: async (scope, transactionId) => getDraftByTransactionId(db, transactionId, scope),
+  saveDraft: async (scope, draft) => saveDraft(db, draft, scope),
+  dispatchDraftAction: async (scope, args) => dispatchDraftAction(db, args, scope),
+  validateTaxCompliance: async (scope, args) => validateTaxCompliance(db, args, scope),
+  postDraft: async (scope, draftId, options) => postDraft(db, draftId, options, scope),
+  reverseJournalEntry: async (scope, entryId, reason) => reverseJournalEntry(db, entryId, reason, scope),
+  listJournalEntries: async (scope, args) => listJournalEntries(db, args, scope),
+  getLedgerBalances: async (scope, args) => getLedgerBalances(db, args, scope),
+  getSusaReport: async (scope, args) => getSusaReport(db, args, scope),
+  getGuvReport: async (scope, args) => getGuvReport(db, args, scope),
+  getBilanzReport: async (scope, args) => getBilanzReport(db, args, scope),
+  listDatevExports: async (scope) => listDatevExports(db, scope),
+  insertDatevExport: async (scope, args) => insertDatevExport(db, args, scope),
+  getAccountingHealth: async (scope) => getAccountingHealth(db, scope),
+  getVatSummary: async (scope, args) => getVatSummary(db, args, scope),
+  buildDatevRows: async (scope, args) => buildDatevRows(db, args, scope),
+  ensureSeedData: async (scope) => {
+    ensureProAccountingSeedData(db, scope);
+  },
+});
+
+export const createSqliteProWorkflowRepository = (db: Database.Database): ProWorkflowRepository => ({
+  list: async (scope) => listProWorkflowEntries(db, scope),
+  upsert: async (scope, args) => upsertProWorkflowEntry(db, args, scope),
+});
+
+export const createSqliteProAccountingCatalogRepository = (
+  db: Database.Database,
+): ProAccountingCatalogRepository => ({
+  listLedgerAccounts: async (scope, args) => listLedgerAccounts(db, args, scope),
+  getLedgerStats: async () => getLedgerAccountStats(db),
+  listTaxCases: async (_scope, args) => listTaxCases(db, args),
+  listTaxCaseAccountMappings: async (_scope, args) => listTaxCaseAccountMappings(db, args),
+  upsertTaxCaseAccountMapping: async (_scope, args) => upsertTaxCaseAccountMapping(db, args),
+  listAccountSuggestionRules: async (scope, args) => listAccountSuggestionRules(db, args, scope),
+  upsertAccountSuggestionRule: async (scope, input) => upsertAccountSuggestionRule(db, input, scope),
+  deleteAccountSuggestionRule: async (scope, id) => {
+    deleteAccountSuggestionRule(db, id, scope);
+  },
+});

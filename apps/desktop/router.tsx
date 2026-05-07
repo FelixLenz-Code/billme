@@ -31,13 +31,22 @@ import { useUiStore } from './state/uiStore';
 import { Invoice } from './types';
 import { useUpsertInvoiceMutation } from './hooks/useInvoices';
 import { useUpsertOfferMutation } from './hooks/useOffers';
-import { useSettingsQuery } from './hooks/useSettings';
 import { ipc } from './ipc/client';
+import { useSettingsQuery } from './hooks/useSettings';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import { ShortcutsModal } from './components/ShortcutsModal';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { shouldShowBusinessOnboarding } from '@billme/ui';
 import { MOCK_SETTINGS } from './data/mockData';
+import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from '@billme/server-core/services';
 
 const RootLayout: React.FC = () => {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [showShortcuts, setShowShortcuts] = React.useState(false);
+
+  const { data: settings } = useSettingsQuery();
+  const showOnboarding = shouldShowBusinessOnboarding(settings);
 
   const activePage = (() => {
     if (pathname.startsWith('/finance') || pathname.startsWith('/accounts') || pathname.startsWith('/statistics') || pathname.startsWith('/eur'))
@@ -61,14 +70,34 @@ const RootLayout: React.FC = () => {
     navigate({ to });
   };
 
+  useKeyboardShortcuts({
+    onShowShortcuts: () => setShowShortcuts(true),
+    onNew: () => {
+      if (pathname.startsWith('/documents')) navigate({ to: '/documents' });
+      else if (pathname.startsWith('/clients')) navigate({ to: '/clients' });
+      else if (pathname.startsWith('/articles')) navigate({ to: '/articles' });
+    },
+  });
+
   return (
-    <DashboardLayout
-      activePage={activePage}
-      onNavigate={handleNavigate}
-      isEditorActive={isEditorActive}
-    >
-      <Outlet />
-    </DashboardLayout>
+    <>
+      <DashboardLayout
+        activePage={activePage}
+        onNavigate={handleNavigate}
+        isEditorActive={isEditorActive}
+      >
+        <Outlet />
+      </DashboardLayout>
+      {showOnboarding && settings && (
+        <OnboardingWizard
+          settings={settings}
+          onComplete={() => {
+            // Settings query will auto-refresh; wizard disappears when onboardingCompleted=true
+          }}
+        />
+      )}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+    </>
   );
 };
 
@@ -139,15 +168,20 @@ const DocumentsPage: React.FC = () => {
           numberReservationId: reservation.reservationId,
           client: '',
           clientEmail: '',
+          taxMode: resolveInvoiceTaxMode(undefined, settings),
           date: new Date().toISOString().split('T')[0] ?? '',
           dueDate: '',
-          taxMode: settings.legal.smallBusinessRule ? 'small_business_19_ustg' : 'standard_vat',
           amount: 0,
           status: 'draft',
           items: [],
           payments: [],
           history: [],
         };
+        newInvoice.taxSnapshot = calculateInvoiceTaxSnapshot(
+          { items: newInvoice.items, taxMode: newInvoice.taxMode },
+          settings,
+        );
+        newInvoice.amount = newInvoice.taxSnapshot.grossAmount;
         setEditingInvoice(newInvoice, type, 'create');
         navigate({ to: '/documents/edit' });
       } catch (error) {
@@ -293,11 +327,27 @@ const DocumentEditorPage: React.FC = () => {
         >
           <div className="w-full max-w-lg rounded-3xl bg-white shadow-xl p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Grund der Änderung</h3>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-gray-500 mb-3">
               Bitte gib einen Grund an. Dieser wird im Audit-Log gespeichert (GoBD).
             </p>
 
-            <label className="text-xs font-bold text-gray-700">Grund (Pflicht)</label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {['Tippfehler korrigiert', 'Adresse aktualisiert', 'Betrag angepasst', 'Kundendaten geändert', 'Sonstiges'].map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => {
+                    setReason(chip);
+                    if (reasonError) setReasonError(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${reason === chip ? 'bg-black text-white border-black' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            <label className="text-xs font-bold text-gray-700">Eigener Grund</label>
             <textarea
               autoFocus
               value={reason}
@@ -318,30 +368,34 @@ const DocumentEditorPage: React.FC = () => {
                   submitSave();
                 }
               }}
-              rows={4}
+              rows={3}
               className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-black"
-              placeholder="z.B. Korrektur der Lieferadresse, Preis angepasst, ..."
+              placeholder="Oder eigenen Grund eingeben..."
             />
             {reasonError && <div className="mt-2 text-sm font-bold text-red-600">{reasonError}</div>}
 
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                className="px-5 py-2.5 rounded-xl font-bold bg-gray-100 text-gray-900 hover:bg-gray-200 transition-colors"
-                onClick={() => {
-                  setIsReasonOpen(false);
-                  setPendingDoc(null);
-                  setReason('');
-                  setReasonError(null);
-                }}
-              >
-                Abbrechen
-              </button>
-              <button
-                className="px-5 py-2.5 rounded-xl font-bold bg-black text-white hover:bg-gray-800 transition-colors"
-                onClick={submitSave}
-              >
-                Speichern
-              </button>
+            <div className="mt-6 flex items-center justify-between gap-3">
+              <span className="text-[10px] text-gray-400 font-medium">⌘ Enter zum Speichern · Esc zum Abbrechen</span>
+              <div className="flex items-center gap-3">
+                <button
+                  className="px-5 py-2.5 rounded-xl font-bold bg-gray-100 text-gray-900 hover:bg-gray-200 transition-colors"
+                  onClick={() => {
+                    setIsReasonOpen(false);
+                    setPendingDoc(null);
+                    setReason('');
+                    setReasonError(null);
+                  }}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  className="px-5 py-2.5 rounded-xl font-bold bg-black text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={submitSave}
+                  disabled={!reason.trim()}
+                >
+                  Speichern
+                </button>
+              </div>
             </div>
           </div>
         </div>

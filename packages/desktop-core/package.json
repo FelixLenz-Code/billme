@@ -1,0 +1,51 @@
+{
+  "name": "@billme/desktop-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "nodemailer": "^6.9.15",
+    "zustand": "^5.0.10"
+  },
+  "peerDependencies": {
+    "electron": ">=37.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "@types/nodemailer": "^6.4.16",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./utils/logger": {
+      "types": "./src/utils/logger.ts",
+      "default": "./src/utils/logger.ts"
+    },
+    "./utils/retry": {
+      "types": "./src/utils/retry.ts",
+      "default": "./src/utils/retry.ts"
+    },
+    "./ipc/errorHandler": {
+      "types": "./src/ipc/errorHandler.ts",
+      "default": "./src/ipc/errorHandler.ts"
+    },
+    "./hooks/useToast": {
+      "types": "./src/hooks/useToast.ts",
+      "default": "./src/hooks/useToast.ts"
+    },
+    "./services/emailService": {
+      "types": "./src/services/emailService.ts",
+      "default": "./src/services/emailService.ts"
+    },
+    "./state/notificationsStore": {
+      "types": "./src/state/notificationsStore.ts",
+      "default": "./src/state/notificationsStore.ts"
+    }
+  }
+}

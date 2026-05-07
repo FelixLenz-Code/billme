@@ -109,7 +109,7 @@ const DashboardSettingsPopover: React.FC<{
         <div
           ref={dropdownRef}
           style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
-          className="bg-white text-black rounded-2xl shadow-2xl border border-gray-200 p-4 min-w-[260px] animate-scale-in"
+          className="bg-white dark:bg-gray-900 text-black dark:text-gray-100 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 min-w-[260px] animate-scale-in"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="space-y-3">
@@ -837,12 +837,12 @@ export const AccountsView: React.FC = () => {
     // --- Detail View ---
     if (selectedAccount) {
         return (
-            <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden p-8 min-h-full flex flex-col relative animate-enter">
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-sm overflow-hidden p-8 min-h-full flex flex-col relative animate-enter">
                 
                 {/* CSV Import Modal */}
                 {isImportOpen && (
                   <div className="absolute inset-0 z-50 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 rounded-[2.5rem] animate-fade-in">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-in">
+                    <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-in">
                       <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                         <div>
                           <h3 className="font-bold text-lg">CSV Import</h3>
@@ -1245,7 +1245,7 @@ export const AccountsView: React.FC = () => {
 
     // --- Overview View ---
     return (
-        <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden p-8 h-full animate-enter">
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-sm overflow-hidden p-8 h-full animate-enter">
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h3 className="font-bold text-2xl text-gray-900">Geschäftskonten</h3>
@@ -1273,7 +1273,7 @@ export const AccountsView: React.FC = () => {
             {/* Add Account Modal */}
             {isAddAccountOpen && (
               <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
                   <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <h3 className="font-bold text-lg">Konto hinzufügen</h3>
                     <button onClick={() => setIsAddAccountOpen(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={18} /></button>
@@ -1424,22 +1424,22 @@ export const TemplatesView: React.FC<{ onOpenEditor: (type: 'invoice' | 'offer')
     };
 
     return (
-        <div className="bg-white rounded-[2.5rem] shadow-sm p-8 min-h-[80vh] animate-enter">
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-sm p-8 min-h-[80vh] animate-enter">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h3 className="font-bold text-2xl text-gray-900 mb-1">Vorlagen</h3>
+                    <h3 className="font-bold text-2xl text-gray-900 dark:text-gray-100 mb-1">Vorlagen</h3>
                     <p className="text-sm text-gray-500">Gestalten Sie Ihre Geschäftsdokumente.</p>
                 </div>
-                <div className="bg-gray-100 p-1 rounded-full flex items-center">
+                <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-full flex items-center">
                     <button 
                         onClick={() => setActiveTab('invoice')}
-                        className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'invoice' ? 'bg-white shadow text-black' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'invoice' ? 'bg-white dark:bg-gray-700 shadow text-black dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
                     >
                         Rechnungen
                     </button>
                     <button 
                         onClick={() => setActiveTab('offer')}
-                        className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'offer' ? 'bg-white shadow text-black' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'offer' ? 'bg-white dark:bg-gray-700 shadow text-black dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
                     >
                         Angebote
                     </button>
@@ -1450,9 +1450,9 @@ export const TemplatesView: React.FC<{ onOpenEditor: (type: 'invoice' | 'offer')
                 {/* Create New Card */}
                 <div 
                     onClick={() => void handleCreateNewTemplate()}
-                    className="aspect-[3/4] bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-black hover:bg-gray-100 transition-all group animate-scale-in"
+                    className="aspect-[3/4] bg-gray-50 dark:bg-gray-800 rounded-[2rem] border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-black dark:hover:border-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all group animate-scale-in"
                 >
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                    <div className="w-16 h-16 bg-white dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                         <Plus size={24} className="text-gray-400 group-hover:text-black" />
                     </div>
                     <span className="font-bold text-gray-400 group-hover:text-black text-center px-4">
@@ -1483,8 +1483,8 @@ export const TemplatesView: React.FC<{ onOpenEditor: (type: 'invoice' | 'offer')
                              </div>
                          </div>
                     </div>
-                    <h4 className="font-bold text-lg">{t.name}</h4>
-                    <p className="text-xs text-gray-500">A4 • {t.id === activeTemplate?.id ? 'Aktiv' : 'Vorlage'}</p>
+                    <h4 className="font-bold text-lg dark:text-gray-100">{t.name}</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">A4 • {t.id === activeTemplate?.id ? 'Aktiv' : 'Vorlage'}</p>
 
                     <button
                         onClick={(e) => {
@@ -1494,7 +1494,7 @@ export const TemplatesView: React.FC<{ onOpenEditor: (type: 'invoice' | 'offer')
                         className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase border transition-colors ${
                             t.id === activeTemplate?.id
                                 ? 'bg-accent text-black border-accent'
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                                : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
                         }`}
                     >
                         {t.id === activeTemplate?.id ? 'Aktiv' : 'Aktivieren'}
