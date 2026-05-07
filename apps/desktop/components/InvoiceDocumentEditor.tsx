@@ -14,7 +14,11 @@ import { useArticlesQuery } from '../hooks/useArticles';
 import { useProjectsQuery } from '../hooks/useProjects';
 import { formatAddressMultiline } from '../utils/formatters';
 import { useUiStore } from '../state/uiStore';
-import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from '@billme/server-core/services';
+import {
+  calculateInvoiceTaxSnapshot,
+  INVOICE_TAX_MODE_DEFINITIONS,
+  resolveInvoiceTaxMode,
+} from '@billme/server-core/services';
 
 interface InvoiceDocumentEditorProps {
   invoice: Invoice;
@@ -191,7 +195,7 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   );
   const totals = {
     net: taxSnapshot.netAmount,
-    vat: taxSnapshot.taxAmount,
+    vat: taxSnapshot.vatAmount,
     gross: taxSnapshot.grossAmount,
   };
 
@@ -368,58 +372,17 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                                 setFormData((prev) => ({
                                   ...prev,
                                   taxMode: e.target.value as Invoice['taxMode'],
-                                  taxMeta:
-                                    e.target.value === 'custom'
-                                      ? prev.taxMeta ?? { rate: effectiveSettings.legal.defaultVatRate }
-                                      : prev.taxMeta,
                                 }))
                               }
                               className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
                             >
-                              <option value="standard_vat">Standard MwSt.</option>
-                              <option value="small_business_19_ustg">Kleinunternehmer (§ 19 UStG)</option>
-                              <option value="custom">Eigene Steuerregel</option>
+                              {INVOICE_TAX_MODE_DEFINITIONS.map((definition) => (
+                                <option key={definition.mode} value={definition.mode}>
+                                  {definition.label}
+                                </option>
+                              ))}
                             </select>
                           </div>
-                          {formData.taxMode === 'custom' && (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Steuersatz (%)</label>
-                                <input
-                                  type="number"
-                                  value={formData.taxMeta?.rate ?? effectiveSettings.legal.defaultVatRate}
-                                  onChange={(e) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      taxMeta: {
-                                        ...prev.taxMeta,
-                                        rate: Number(e.target.value) || 0,
-                                      },
-                                    }))
-                                  }
-                                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Bezeichnung</label>
-                                <input
-                                  type="text"
-                                  value={formData.taxMeta?.label ?? ''}
-                                  onChange={(e) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      taxMeta: {
-                                        ...prev.taxMeta,
-                                        label: e.target.value,
-                                      },
-                                    }))
-                                  }
-                                  placeholder="z. B. Reverse Charge"
-                                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
-                                />
-                              </div>
-                            </div>
-                          )}
                         </div>
                     </div>
                 </div>
@@ -541,12 +504,9 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                             <span>{formatCurrency(totals.net)}</span>
                         </div>
                         <div className="flex justify-between text-sm text-gray-500">
-                            <span>{taxSnapshot.taxLabel} ({taxSnapshot.taxRate}%)</span>
+                            <span>{taxSnapshot.label ?? 'USt'} ({taxSnapshot.vatRateApplied}%)</span>
                             <span>{formatCurrency(totals.vat)}</span>
                         </div>
-                        {taxSnapshot.taxNote ? (
-                          <div className="text-xs text-gray-500 pt-1">{taxSnapshot.taxNote}</div>
-                        ) : null}
                         <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-2 mt-2">
                             <span>Gesamtbetrag</span>
                             <span>{formatCurrency(totals.gross)}</span>
@@ -567,10 +527,6 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                         taxSnapshot,
                         amount: taxSnapshot.grossAmount,
                       };
-                      if (resolvedTaxMode === 'custom' && !normalized.taxMeta?.label?.trim()) {
-                        setSaveError('Bitte gib fuer benutzerdefinierte Steuerregeln eine Bezeichnung an.');
-                        return;
-                      }
                       onSave(normalized);
                     }}
                     className="w-full bg-accent text-black font-bold py-3 rounded-xl hover:bg-accent-hover transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent/20 active:scale-95"

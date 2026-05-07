@@ -287,19 +287,19 @@ export const runMigrations = (db: Database.Database): void => {
   `);
   for (const row of invoiceTaxRows) {
     const netAmount = Number(row.net_total) || 0;
-    const taxAmount = isSmallBusiness ? 0 : netAmount * (defaultVatRate / 100);
+    const vatAmount = isSmallBusiness ? 0 : netAmount * (defaultVatRate / 100);
     updateInvoiceTax.run({
       id: row.id,
       taxMode: row.tax_mode ?? defaultTaxMode,
       taxSnapshotJson:
         row.tax_snapshot_json ??
         JSON.stringify({
+          vatRateApplied: isSmallBusiness ? 0 : defaultVatRate,
+          vatAmount,
           netAmount,
-          taxAmount,
-          grossAmount: netAmount + taxAmount,
-          taxRate: isSmallBusiness ? 0 : defaultVatRate,
-          taxLabel: isSmallBusiness ? 'Keine Umsatzsteuer' : `MwSt. ${defaultVatRate}%`,
-          taxNote: defaultTaxNote,
+          grossAmount: netAmount + vatAmount,
+          label: isSmallBusiness ? 'Keine Umsatzsteuer' : `MwSt. ${defaultVatRate}%`,
+          einvoiceCategoryCode: isSmallBusiness ? 'E' : 'S',
         }),
     });
   }
@@ -323,19 +323,19 @@ export const runMigrations = (db: Database.Database): void => {
   `);
   for (const row of offerTaxRows) {
     const netAmount = Number(row.net_total) || 0;
-    const taxAmount = isSmallBusiness ? 0 : netAmount * (defaultVatRate / 100);
+    const vatAmount = isSmallBusiness ? 0 : netAmount * (defaultVatRate / 100);
     updateOfferTax.run({
       id: row.id,
       taxMode: row.tax_mode ?? defaultTaxMode,
       taxSnapshotJson:
         row.tax_snapshot_json ??
         JSON.stringify({
+          vatRateApplied: isSmallBusiness ? 0 : defaultVatRate,
+          vatAmount,
           netAmount,
-          taxAmount,
-          grossAmount: netAmount + taxAmount,
-          taxRate: isSmallBusiness ? 0 : defaultVatRate,
-          taxLabel: isSmallBusiness ? 'Keine Umsatzsteuer' : `MwSt. ${defaultVatRate}%`,
-          taxNote: defaultTaxNote,
+          grossAmount: netAmount + vatAmount,
+          label: isSmallBusiness ? 'Keine Umsatzsteuer' : `MwSt. ${defaultVatRate}%`,
+          einvoiceCategoryCode: isSmallBusiness ? 'E' : 'S',
         }),
     });
   }

@@ -141,18 +141,19 @@ export const InvoiceItemSchema = z.object({
 export const InvoiceItemsSchema = z.array(InvoiceItemSchema);
 
 export const InvoiceTaxMetaSchema = z.object({
-  label: z.string().optional(),
-  note: z.string().optional(),
-  rate: z.number().optional(),
+  legalReference: z.string().optional(),
+  exemptionReasonOverride: z.string().optional(),
+  buyerVatId: z.string().optional(),
+  sellerVatId: z.string().optional(),
 });
 
 export const InvoiceTaxSnapshotSchema = z.object({
+  vatRateApplied: z.number(),
+  vatAmount: z.number(),
   netAmount: z.number(),
-  taxAmount: z.number(),
   grossAmount: z.number(),
-  taxRate: z.number(),
-  taxLabel: z.string(),
-  taxNote: z.string().optional(),
+  einvoiceCategoryCode: z.enum(['S', 'E', 'AE', 'O']),
+  label: z.string().optional(),
 });
 
 // Settings schema components

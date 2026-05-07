@@ -29,21 +29,31 @@ export const paymentSchema = z.object({
   method: z.string(),
 });
 
-export const invoiceTaxModeSchema = z.enum(['standard_vat', 'small_business_19_ustg', 'custom']);
+export const invoiceTaxModeSchema = z.enum([
+  'standard_vat',
+  'small_business_19_ustg',
+  'reverse_charge_13b',
+  'intra_eu_supply_6a',
+  'intra_eu_service_reverse_charge',
+  'export_third_country',
+  'vat_exempt_4_ustg',
+  'non_taxable_outside_scope',
+]);
 
 export const invoiceTaxMetaSchema = z.object({
-  label: z.string().optional(),
-  note: z.string().optional(),
-  rate: z.number().optional(),
+  legalReference: z.string().optional(),
+  exemptionReasonOverride: z.string().optional(),
+  buyerVatId: z.string().optional(),
+  sellerVatId: z.string().optional(),
 });
 
 export const invoiceTaxSnapshotSchema = z.object({
+  vatRateApplied: z.number(),
+  vatAmount: z.number(),
   netAmount: z.number(),
-  taxAmount: z.number(),
   grossAmount: z.number(),
-  taxRate: z.number(),
-  taxLabel: z.string(),
-  taxNote: z.string().optional(),
+  einvoiceCategoryCode: z.enum(['S', 'E', 'AE', 'O']),
+  label: z.string().optional(),
 });
 
 export const invoiceSchema = z.object({

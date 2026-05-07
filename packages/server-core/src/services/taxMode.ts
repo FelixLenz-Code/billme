@@ -1,5 +1,6 @@
 import type {
   BillingLineItem,
+  InvoiceTaxModeDefinition,
   InvoiceTaxMeta,
   InvoiceTaxMode,
   InvoiceTaxSnapshot,
@@ -20,13 +21,94 @@ export type TaxableDocumentInput = {
 
 const round2 = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
+export const DEFAULT_TAX_MODE: InvoiceTaxMode = 'standard_vat';
+
+export const INVOICE_TAX_MODE_DEFINITIONS: InvoiceTaxModeDefinition[] = [
+  {
+    mode: 'standard_vat',
+    label: 'Regelbesteuerung',
+    description: 'Umsatzsteuer wird mit dem Standardsteuersatz berechnet.',
+    einvoiceCategoryCode: 'S',
+  },
+  {
+    mode: 'small_business_19_ustg',
+    label: 'Kleinunternehmer (§19 UStG)',
+    description: 'Kein USt-Ausweis wegen Kleinunternehmerregelung.',
+    legalReference: '§ 19 UStG',
+    einvoiceCategoryCode: 'E',
+    requiresExemptionReason: true,
+    forceZeroVat: true,
+  },
+  {
+    mode: 'reverse_charge_13b',
+    label: 'Reverse Charge (§13b UStG)',
+    description: 'Steuerschuldnerschaft des Leistungsempfängers.',
+    legalReference: '§ 13b UStG',
+    einvoiceCategoryCode: 'AE',
+    requiresBuyerVatId: true,
+    requiresExemptionReason: true,
+    forceZeroVat: true,
+  },
+  {
+    mode: 'intra_eu_supply_6a',
+    label: 'Innergemeinschaftliche Lieferung',
+    description: 'Steuerfreie innergemeinschaftliche Lieferung.',
+    legalReference: '§ 6a UStG',
+    einvoiceCategoryCode: 'E',
+    requiresBuyerVatId: true,
+    requiresExemptionReason: true,
+    forceZeroVat: true,
+  },
+  {
+    mode: 'intra_eu_service_reverse_charge',
+    label: 'EU-Leistung Reverse Charge',
+    description: 'B2B-Leistung innerhalb EU (Reverse Charge).',
+    legalReference: 'Art. 196 MwStSystRL',
+    einvoiceCategoryCode: 'AE',
+    requiresBuyerVatId: true,
+    requiresExemptionReason: true,
+    forceZeroVat: true,
+  },
+  {
+    mode: 'export_third_country',
+    label: 'Drittlandsausfuhr',
+    description: 'Lieferung/Leistung ins Drittland.',
+    legalReference: '§ 4 Nr. 1a UStG',
+    einvoiceCategoryCode: 'E',
+    requiresExemptionReason: true,
+    forceZeroVat: true,
+  },
+  {
+    mode: 'vat_exempt_4_ustg',
+    label: 'Steuerfrei (§4 UStG)',
+    description: 'Umsatzsteuerbefreiung nach §4 UStG.',
+    legalReference: '§ 4 UStG',
+    einvoiceCategoryCode: 'E',
+    requiresExemptionReason: true,
+    forceZeroVat: true,
+  },
+  {
+    mode: 'non_taxable_outside_scope',
+    label: 'Nicht steuerbar',
+    description: 'Umsatz liegt außerhalb des Anwendungsbereichs der USt.',
+    einvoiceCategoryCode: 'O',
+    requiresExemptionReason: true,
+    forceZeroVat: true,
+  },
+];
+
+const TAX_MODE_MAP = new Map(INVOICE_TAX_MODE_DEFINITIONS.map((item) => [item.mode, item]));
+
+export const getInvoiceTaxModeDefinition = (mode: InvoiceTaxMode): InvoiceTaxModeDefinition =>
+  TAX_MODE_MAP.get(mode) ?? TAX_MODE_MAP.get(DEFAULT_TAX_MODE)!;
+
 export const resolveInvoiceTaxMode = (
   taxMode: InvoiceTaxMode | undefined,
   settings: TaxSettingsShape,
 ): InvoiceTaxMode => {
-  if (taxMode === 'custom') return 'custom';
+  if (taxMode && TAX_MODE_MAP.has(taxMode)) return taxMode;
   if (settings.legal.smallBusinessRule) return 'small_business_19_ustg';
-  return taxMode === 'small_business_19_ustg' ? 'standard_vat' : (taxMode ?? 'standard_vat');
+  return DEFAULT_TAX_MODE;
 };
 
 export const calculateInvoiceTaxSnapshot = (
@@ -35,33 +117,16 @@ export const calculateInvoiceTaxSnapshot = (
 ): InvoiceTaxSnapshot => {
   const netAmount = round2((input.items ?? []).reduce((sum, item) => sum + (Number(item.total) || 0), 0));
   const resolvedTaxMode = resolveInvoiceTaxMode(input.taxMode, settings);
-
-  if (resolvedTaxMode === 'small_business_19_ustg') {
-    return {
-      netAmount,
-      taxAmount: 0,
-      grossAmount: netAmount,
-      taxRate: 0,
-      taxLabel: input.taxMeta?.label?.trim() || 'Keine Umsatzsteuer',
-      taxNote:
-        input.taxMeta?.note?.trim() || 'Gem. § 19 UStG wird keine Umsatzsteuer berechnet.',
-    };
-  }
-
-  const taxRate =
-    resolvedTaxMode === 'custom'
-      ? Number(input.taxMeta?.rate) || 0
-      : Number(settings.legal.defaultVatRate) || 0;
-  const taxAmount = round2(netAmount * (taxRate / 100));
+  const definition = getInvoiceTaxModeDefinition(resolvedTaxMode);
+  const vatRateApplied = definition.forceZeroVat ? 0 : Number(settings.legal.defaultVatRate) || 0;
+  const vatAmount = round2(netAmount * (vatRateApplied / 100));
 
   return {
+    vatRateApplied,
+    vatAmount,
     netAmount,
-    taxAmount,
-    grossAmount: round2(netAmount + taxAmount),
-    taxRate,
-    taxLabel:
-      input.taxMeta?.label?.trim() ||
-      (resolvedTaxMode === 'custom' ? 'Steuer' : `MwSt. ${taxRate.toFixed(0)}%`),
-    taxNote: input.taxMeta?.note?.trim() || undefined,
+    grossAmount: round2(netAmount + vatAmount),
+    einvoiceCategoryCode: definition.einvoiceCategoryCode,
+    label: definition.label,
   };
 };

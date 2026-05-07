@@ -16,19 +16,28 @@ export type InvoiceLike = {
   clientNumber?: string;
   clientAddress?: string;
   clientEmail?: string;
-  taxMode?: 'standard_vat' | 'small_business_19_ustg' | 'custom';
+  taxMode?:
+    | 'standard_vat'
+    | 'small_business_19_ustg'
+    | 'reverse_charge_13b'
+    | 'intra_eu_supply_6a'
+    | 'intra_eu_service_reverse_charge'
+    | 'export_third_country'
+    | 'vat_exempt_4_ustg'
+    | 'non_taxable_outside_scope';
   taxMeta?: {
-    label?: string;
-    note?: string;
-    rate?: number;
+    legalReference?: string;
+    exemptionReasonOverride?: string;
+    buyerVatId?: string;
+    sellerVatId?: string;
   };
   taxSnapshot?: {
+    vatRateApplied: number;
+    vatAmount: number;
     netAmount: number;
-    taxAmount: number;
     grossAmount: number;
-    taxRate: number;
-    taxLabel: string;
-    taxNote?: string;
+    einvoiceCategoryCode: 'S' | 'E' | 'AE' | 'O';
+    label?: string;
   };
   items: InvoiceItemLike[];
 };
@@ -140,24 +149,31 @@ export const replacePlaceholders = (text: string, invoice: InvoiceLike, settings
         : invoice.taxMode ?? 'standard_vat';
       if (taxMode === 'small_business_19_ustg') {
         return {
+          vatRateApplied: 0,
+          vatAmount: 0,
           netAmount: net,
-          taxAmount: 0,
           grossAmount: net,
-          taxRate: 0,
-          taxLabel: invoice.taxMeta?.label ?? 'Keine Umsatzsteuer',
+          label: 'Keine Umsatzsteuer',
+          einvoiceCategoryCode: 'E' as const,
         };
       }
-      const taxRate =
-        taxMode === 'custom'
-          ? Number(invoice.taxMeta?.rate) || 0
-          : Number(settings.legal.defaultVatRate) || 0;
-      const taxAmount = round2(net * (taxRate / 100));
+      const zeroVatModes = new Set([
+        'reverse_charge_13b',
+        'intra_eu_supply_6a',
+        'intra_eu_service_reverse_charge',
+        'export_third_country',
+        'vat_exempt_4_ustg',
+        'non_taxable_outside_scope',
+      ]);
+      const vatRateApplied = zeroVatModes.has(taxMode) ? 0 : Number(settings.legal.defaultVatRate) || 0;
+      const vatAmount = round2(net * (vatRateApplied / 100));
       return {
+        vatRateApplied,
+        vatAmount,
         netAmount: net,
-        taxAmount,
-        grossAmount: round2(net + taxAmount),
-        taxRate,
-        taxLabel: invoice.taxMeta?.label ?? `MwSt. ${taxRate.toFixed(0)}%`,
+        grossAmount: round2(net + vatAmount),
+        label: zeroVatModes.has(taxMode) ? 'Keine Umsatzsteuer' : `MwSt. ${vatRateApplied.toFixed(0)}%`,
+        einvoiceCategoryCode: zeroVatModes.has(taxMode) ? 'E' : 'S',
       };
     })();
 
@@ -185,9 +201,9 @@ export const replacePlaceholders = (text: string, invoice: InvoiceLike, settings
     'my.taxId': settings.finance.taxId,
     'my.vatId': settings.finance.vatId,
     'total.net': formatCurrency(taxSnapshot.netAmount),
-    'total.tax': formatCurrency(taxSnapshot.taxAmount),
+    'total.tax': formatCurrency(taxSnapshot.vatAmount),
     'total.gross': formatCurrency(taxSnapshot.grossAmount),
-    'total.taxRate': `${taxSnapshot.taxRate}%`,
+    'total.taxRate': `${taxSnapshot.vatRateApplied}%`,
   };
 
   return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
