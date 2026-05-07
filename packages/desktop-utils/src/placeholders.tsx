@@ -16,11 +16,26 @@ export type InvoiceLike = {
   clientNumber?: string;
   clientAddress?: string;
   clientEmail?: string;
+  taxMode?: 'standard_vat' | 'small_business_19_ustg' | 'custom';
+  taxMeta?: {
+    label?: string;
+    note?: string;
+    rate?: number;
+  };
+  taxSnapshot?: {
+    netAmount: number;
+    taxAmount: number;
+    grossAmount: number;
+    taxRate: number;
+    taxLabel: string;
+    taxNote?: string;
+  };
   items: InvoiceItemLike[];
 };
 
 export type AppSettingsLike = {
   legal: {
+    smallBusinessRule?: boolean;
     defaultVatRate: number;
   };
   company: {
@@ -111,13 +126,40 @@ const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
 };
 
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
 export const replacePlaceholders = (text: string, invoice: InvoiceLike, settings: AppSettingsLike): string => {
   if (!text) return '';
 
-  const net = invoice.items.reduce((acc, item) => acc + item.total, 0);
-  const taxRate = settings.legal.defaultVatRate;
-  const tax = net * (taxRate / 100);
-  const gross = net + tax;
+  const net = round2(invoice.items.reduce((acc, item) => acc + item.total, 0));
+  const taxSnapshot =
+    invoice.taxSnapshot ??
+    (() => {
+      const taxMode = settings.legal.smallBusinessRule
+        ? 'small_business_19_ustg'
+        : invoice.taxMode ?? 'standard_vat';
+      if (taxMode === 'small_business_19_ustg') {
+        return {
+          netAmount: net,
+          taxAmount: 0,
+          grossAmount: net,
+          taxRate: 0,
+          taxLabel: invoice.taxMeta?.label ?? 'Keine Umsatzsteuer',
+        };
+      }
+      const taxRate =
+        taxMode === 'custom'
+          ? Number(invoice.taxMeta?.rate) || 0
+          : Number(settings.legal.defaultVatRate) || 0;
+      const taxAmount = round2(net * (taxRate / 100));
+      return {
+        netAmount: net,
+        taxAmount,
+        grossAmount: round2(net + taxAmount),
+        taxRate,
+        taxLabel: invoice.taxMeta?.label ?? `MwSt. ${taxRate.toFixed(0)}%`,
+      };
+    })();
 
   const dataMap: Record<string, string> = {
     'invoice.number': invoice.number,
@@ -142,10 +184,10 @@ export const replacePlaceholders = (text: string, invoice: InvoiceLike, settings
     'my.bic': settings.finance.bic,
     'my.taxId': settings.finance.taxId,
     'my.vatId': settings.finance.vatId,
-    'total.net': formatCurrency(net),
-    'total.tax': formatCurrency(tax),
-    'total.gross': formatCurrency(gross),
-    'total.taxRate': `${taxRate}%`,
+    'total.net': formatCurrency(taxSnapshot.netAmount),
+    'total.tax': formatCurrency(taxSnapshot.taxAmount),
+    'total.gross': formatCurrency(taxSnapshot.grossAmount),
+    'total.taxRate': `${taxSnapshot.taxRate}%`,
   };
 
   return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {

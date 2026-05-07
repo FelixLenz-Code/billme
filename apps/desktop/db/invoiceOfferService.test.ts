@@ -74,6 +74,7 @@ const baseOffer: Offer = {
   client: 'ACME GmbH',
   clientEmail: 'billing@acme.test',
   clientAddress: 'Main Street 1',
+  taxMode: 'standard_vat',
   date: '2025-01-10',
   validUntil: '2025-01-24',
   amount: 119,

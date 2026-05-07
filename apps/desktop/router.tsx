@@ -37,6 +37,8 @@ import { OnboardingWizard } from './components/OnboardingWizard';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { shouldShowBusinessOnboarding } from '@billme/ui';
+import { MOCK_SETTINGS } from './data/mockData';
+import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from '@billme/server-core/services';
 
 const RootLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -145,6 +147,8 @@ const TemplateEditorPage: React.FC<{ templateType: 'invoice' | 'offer' }> = ({
 const DocumentsPage: React.FC = () => {
   const navigate = useNavigate();
   const setEditingInvoice = useUiStore((s) => s.setEditingInvoice);
+  const { data: settingsFromDb } = useSettingsQuery();
+  const settings = settingsFromDb ?? MOCK_SETTINGS;
   const locationSearch = window.location.search;
   const deepLink = React.useMemo(() => {
     const params = new URLSearchParams(locationSearch);
@@ -164,6 +168,7 @@ const DocumentsPage: React.FC = () => {
           numberReservationId: reservation.reservationId,
           client: '',
           clientEmail: '',
+          taxMode: resolveInvoiceTaxMode(undefined, settings),
           date: new Date().toISOString().split('T')[0] ?? '',
           dueDate: '',
           amount: 0,
@@ -172,6 +177,11 @@ const DocumentsPage: React.FC = () => {
           payments: [],
           history: [],
         };
+        newInvoice.taxSnapshot = calculateInvoiceTaxSnapshot(
+          { items: newInvoice.items, taxMode: newInvoice.taxMode },
+          settings,
+        );
+        newInvoice.amount = newInvoice.taxSnapshot.grossAmount;
         setEditingInvoice(newInvoice, type, 'create');
         navigate({ to: '/documents/edit' });
       } catch (error) {

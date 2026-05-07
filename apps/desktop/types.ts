@@ -186,6 +186,23 @@ export interface Payment {
   method: string;
 }
 
+export type InvoiceTaxMode = 'standard_vat' | 'small_business_19_ustg' | 'custom';
+
+export interface InvoiceTaxMeta {
+  label?: string;
+  note?: string;
+  rate?: number;
+}
+
+export interface InvoiceTaxSnapshot {
+  netAmount: number;
+  taxAmount: number;
+  grossAmount: number;
+  taxRate: number;
+  taxLabel: string;
+  taxNote?: string;
+}
+
 export interface Invoice {
   id: string;
   clientId?: string; // Link to Client
@@ -198,6 +215,9 @@ export interface Invoice {
   clientAddress?: string;
   billingAddressJson?: unknown;
   shippingAddressJson?: unknown;
+  taxMode?: InvoiceTaxMode;
+  taxMeta?: InvoiceTaxMeta;
+  taxSnapshot?: InvoiceTaxSnapshot;
   shareToken?: string | null;
   sharePublishedAt?: string | null;
   shareDecision?: 'accepted' | 'declined' | null;

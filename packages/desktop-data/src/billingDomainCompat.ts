@@ -7,6 +7,8 @@ import {
   type AuditSubject,
   type BillingAddress,
   type Invoice,
+  type InvoiceTaxMeta,
+  type InvoiceTaxSnapshot,
   type Offer,
   type OfferDecision,
   type ServerProduct,
@@ -26,6 +28,9 @@ type InvoiceRow = {
   client_address: string | null;
   billing_address_json: string | null;
   shipping_address_json: string | null;
+  tax_mode: string | null;
+  tax_meta_json: string | null;
+  tax_snapshot_json: string | null;
   date: string;
   due_date: string;
   service_period: string | null;
@@ -66,6 +71,9 @@ type OfferRow = {
   client_address: string | null;
   billing_address_json: string | null;
   shipping_address_json: string | null;
+  tax_mode: string | null;
+  tax_meta_json: string | null;
+  tax_snapshot_json: string | null;
   date: string;
   valid_until: string;
   amount: number;
@@ -135,6 +143,9 @@ export interface LegacyInvoiceDocument {
   clientAddress?: string;
   billingAddressJson?: unknown;
   shippingAddressJson?: unknown;
+  taxMode?: Invoice['taxMode'];
+  taxMeta?: InvoiceTaxMeta;
+  taxSnapshot?: InvoiceTaxSnapshot;
   shareToken?: string | null;
   sharePublishedAt?: string | null;
   shareDecision?: OfferDecision | null;
@@ -223,6 +234,9 @@ export const toDomainInvoice = (scope: TenantScope, invoice: LegacyInvoiceDocume
     clientAddress: invoice.clientAddress,
     billingAddress: normalizeBillingAddress(invoice.billingAddressJson),
     shippingAddress: normalizeBillingAddress(invoice.shippingAddressJson),
+    taxMode: invoice.taxMode ?? 'standard_vat',
+    taxMeta: invoice.taxMeta,
+    taxSnapshot: invoice.taxSnapshot,
     date: invoice.date,
     dueDate: invoice.dueDate,
     servicePeriod: invoice.servicePeriod,
@@ -282,6 +296,9 @@ export const toDomainOffer = (scope: TenantScope, offer: LegacyInvoiceDocument):
     clientAddress: offer.clientAddress,
     billingAddress: normalizeBillingAddress(offer.billingAddressJson),
     shippingAddress: normalizeBillingAddress(offer.shippingAddressJson),
+    taxMode: offer.taxMode ?? 'standard_vat',
+    taxMeta: offer.taxMeta,
+    taxSnapshot: offer.taxSnapshot,
     date: offer.date,
     validUntil: offer.dueDate,
     amount: offer.amount,
@@ -311,6 +328,9 @@ export const toLegacyInvoice = (invoice: Invoice): LegacyInvoiceDocument => {
     clientAddress: invoice.clientAddress,
     billingAddressJson: invoice.billingAddress,
     shippingAddressJson: invoice.shippingAddress,
+    taxMode: invoice.taxMode,
+    taxMeta: invoice.taxMeta,
+    taxSnapshot: invoice.taxSnapshot,
     date: invoice.date,
     dueDate: invoice.dueDate,
     servicePeriod: invoice.servicePeriod,
@@ -347,6 +367,9 @@ export const toLegacyOffer = (offer: Offer): LegacyInvoiceDocument => {
     clientAddress: offer.clientAddress,
     billingAddressJson: offer.billingAddress,
     shippingAddressJson: offer.shippingAddress,
+    taxMode: offer.taxMode,
+    taxMeta: offer.taxMeta,
+    taxSnapshot: offer.taxSnapshot,
     shareToken: offer.share?.token ?? null,
     sharePublishedAt: offer.share?.publishedAt ?? null,
     shareDecision: offer.share?.decision ?? null,
@@ -391,6 +414,9 @@ const rowToInvoice = (
     clientAddress: row.client_address ?? undefined,
     billingAddress: parseStoredAddress(row.billing_address_json, `Invoice ${row.id} billing address`),
     shippingAddress: parseStoredAddress(row.shipping_address_json, `Invoice ${row.id} shipping address`),
+    taxMode: (row.tax_mode as Invoice['taxMode'] | null) ?? 'standard_vat',
+    taxMeta: parseJson(row.tax_meta_json, undefined),
+    taxSnapshot: parseJson(row.tax_snapshot_json, undefined),
     date: row.date,
     dueDate: row.due_date,
     servicePeriod: row.service_period ?? undefined,
@@ -452,6 +478,9 @@ const rowToOffer = (scope: TenantScope, row: OfferRow, itemRows: OfferItemRow[])
     clientAddress: row.client_address ?? undefined,
     billingAddress: parseStoredAddress(row.billing_address_json, `Offer ${row.id} billing address`),
     shippingAddress: parseStoredAddress(row.shipping_address_json, `Offer ${row.id} shipping address`),
+    taxMode: (row.tax_mode as Offer['taxMode'] | null) ?? 'standard_vat',
+    taxMeta: parseJson(row.tax_meta_json, undefined),
+    taxSnapshot: parseJson(row.tax_snapshot_json, undefined),
     date: row.date,
     validUntil: row.valid_until,
     amount: row.amount,
@@ -553,11 +582,11 @@ export const createSqliteInvoiceRepository = (db: Database.Database): SqliteInvo
         `
           INSERT INTO invoices (
             id, client_id, client_number, project_id, number, client, client_email, client_address, billing_address_json, shipping_address_json,
-            date, due_date, service_period, amount, status, dunning_level,
+            tax_mode, tax_meta_json, tax_snapshot_json, date, due_date, service_period, amount, status, dunning_level,
             created_at, updated_at
           ) VALUES (
             @id, @clientId, @clientNumber, @projectId, @number, @client, @clientEmail, @clientAddress, @billingAddressJson, @shippingAddressJson,
-            @date, @dueDate, @servicePeriod, @amount, @status, @dunningLevel,
+            @taxMode, @taxMetaJson, @taxSnapshotJson, @date, @dueDate, @servicePeriod, @amount, @status, @dunningLevel,
             @createdAt, @updatedAt
           )
         `,
@@ -572,6 +601,9 @@ export const createSqliteInvoiceRepository = (db: Database.Database): SqliteInvo
         clientAddress: invoice.clientAddress ?? null,
         billingAddressJson: invoice.billingAddress ? JSON.stringify(invoice.billingAddress) : null,
         shippingAddressJson: invoice.shippingAddress ? JSON.stringify(invoice.shippingAddress) : null,
+        taxMode: invoice.taxMode ?? null,
+        taxMetaJson: invoice.taxMeta ? JSON.stringify(invoice.taxMeta) : null,
+        taxSnapshotJson: invoice.taxSnapshot ? JSON.stringify(invoice.taxSnapshot) : null,
         date: invoice.date,
         dueDate: invoice.dueDate,
         servicePeriod: invoice.servicePeriod ?? null,
@@ -594,6 +626,9 @@ export const createSqliteInvoiceRepository = (db: Database.Database): SqliteInvo
             client_address = @clientAddress,
             billing_address_json = @billingAddressJson,
             shipping_address_json = @shippingAddressJson,
+            tax_mode = @taxMode,
+            tax_meta_json = @taxMetaJson,
+            tax_snapshot_json = @taxSnapshotJson,
             date = @date,
             due_date = @dueDate,
             service_period = @servicePeriod,
@@ -614,6 +649,9 @@ export const createSqliteInvoiceRepository = (db: Database.Database): SqliteInvo
         clientAddress: invoice.clientAddress ?? null,
         billingAddressJson: invoice.billingAddress ? JSON.stringify(invoice.billingAddress) : null,
         shippingAddressJson: invoice.shippingAddress ? JSON.stringify(invoice.shippingAddress) : null,
+        taxMode: invoice.taxMode ?? null,
+        taxMetaJson: invoice.taxMeta ? JSON.stringify(invoice.taxMeta) : null,
+        taxSnapshotJson: invoice.taxSnapshot ? JSON.stringify(invoice.taxSnapshot) : null,
         date: invoice.date,
         dueDate: invoice.dueDate,
         servicePeriod: invoice.servicePeriod ?? null,
@@ -711,12 +749,12 @@ export const createSqliteOfferRepository = (db: Database.Database): SqliteOfferR
         `
           INSERT INTO offers (
             id, client_id, client_number, project_id, number, client, client_email, client_address, billing_address_json, shipping_address_json,
-            date, valid_until, amount, status,
+            tax_mode, tax_meta_json, tax_snapshot_json, date, valid_until, amount, status,
             share_token, share_published_at, accepted_at, accepted_by, accepted_email, accepted_user_agent, decision, decision_text_version,
             created_at, updated_at
           ) VALUES (
             @id, @clientId, @clientNumber, @projectId, @number, @client, @clientEmail, @clientAddress, @billingAddressJson, @shippingAddressJson,
-            @date, @validUntil, @amount, @status,
+            @taxMode, @taxMetaJson, @taxSnapshotJson, @date, @validUntil, @amount, @status,
             @shareToken, @sharePublishedAt, @acceptedAt, @acceptedBy, @acceptedEmail, @acceptedUserAgent, @decision, @decisionTextVersion,
             @createdAt, @updatedAt
           )
@@ -732,6 +770,9 @@ export const createSqliteOfferRepository = (db: Database.Database): SqliteOfferR
         clientAddress: offer.clientAddress ?? null,
         billingAddressJson: offer.billingAddress ? JSON.stringify(offer.billingAddress) : null,
         shippingAddressJson: offer.shippingAddress ? JSON.stringify(offer.shippingAddress) : null,
+        taxMode: offer.taxMode ?? null,
+        taxMetaJson: offer.taxMeta ? JSON.stringify(offer.taxMeta) : null,
+        taxSnapshotJson: offer.taxSnapshot ? JSON.stringify(offer.taxSnapshot) : null,
         date: offer.date,
         validUntil: offer.validUntil,
         amount: offer.amount,
@@ -760,6 +801,9 @@ export const createSqliteOfferRepository = (db: Database.Database): SqliteOfferR
             client_address = @clientAddress,
             billing_address_json = @billingAddressJson,
             shipping_address_json = @shippingAddressJson,
+            tax_mode = @taxMode,
+            tax_meta_json = @taxMetaJson,
+            tax_snapshot_json = @taxSnapshotJson,
             date = @date,
             valid_until = @validUntil,
             amount = @amount,
@@ -786,6 +830,9 @@ export const createSqliteOfferRepository = (db: Database.Database): SqliteOfferR
         clientAddress: offer.clientAddress ?? null,
         billingAddressJson: offer.billingAddress ? JSON.stringify(offer.billingAddress) : null,
         shippingAddressJson: offer.shippingAddress ? JSON.stringify(offer.shippingAddress) : null,
+        taxMode: offer.taxMode ?? null,
+        taxMetaJson: offer.taxMeta ? JSON.stringify(offer.taxMeta) : null,
+        taxSnapshotJson: offer.taxSnapshot ? JSON.stringify(offer.taxSnapshot) : null,
         date: offer.date,
         validUntil: offer.validUntil,
         amount: offer.amount,

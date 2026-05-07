@@ -76,10 +76,16 @@ export const runMigrations = (db: Database.Database): void => {
   // Invoices: structured address snapshots
   addColumnIfMissing(db, 'invoices', 'billing_address_json', 'TEXT');
   addColumnIfMissing(db, 'invoices', 'shipping_address_json', 'TEXT');
+  addColumnIfMissing(db, 'invoices', 'tax_mode', 'TEXT');
+  addColumnIfMissing(db, 'invoices', 'tax_meta_json', 'TEXT');
+  addColumnIfMissing(db, 'invoices', 'tax_snapshot_json', 'TEXT');
 
   // Offers: structured address snapshots
   addColumnIfMissing(db, 'offers', 'billing_address_json', 'TEXT');
   addColumnIfMissing(db, 'offers', 'shipping_address_json', 'TEXT');
+  addColumnIfMissing(db, 'offers', 'tax_mode', 'TEXT');
+  addColumnIfMissing(db, 'offers', 'tax_meta_json', 'TEXT');
+  addColumnIfMissing(db, 'offers', 'tax_snapshot_json', 'TEXT');
 
   // Offers: portal publication + decision fields
   addColumnIfMissing(db, 'offers', 'share_token', 'TEXT');
@@ -255,6 +261,84 @@ export const runMigrations = (db: Database.Database): void => {
   settingsJson.numbers = settingsJson.numbers && typeof settingsJson.numbers === 'object'
     ? settingsJson.numbers
     : {};
+  const isSmallBusiness = Boolean(settingsJson?.legal?.smallBusinessRule);
+  const defaultVatRate = Number(settingsJson?.legal?.defaultVatRate) || 0;
+  const defaultTaxMode = isSmallBusiness ? 'small_business_19_ustg' : 'standard_vat';
+  const defaultTaxNote = isSmallBusiness
+    ? 'Gem. § 19 UStG wird keine Umsatzsteuer berechnet.'
+    : null;
+
+  const invoiceTaxRows = db.prepare(`
+    SELECT id, tax_mode, tax_snapshot_json, (
+      SELECT COALESCE(SUM(total), 0) FROM invoice_items WHERE invoice_id = invoices.id
+    ) AS net_total
+    FROM invoices
+  `).all() as Array<{
+    id: string;
+    tax_mode: string | null;
+    tax_snapshot_json: string | null;
+    net_total: number | null;
+  }>;
+  const updateInvoiceTax = db.prepare(`
+    UPDATE invoices
+       SET tax_mode = COALESCE(NULLIF(tax_mode, ''), @taxMode),
+           tax_snapshot_json = COALESCE(tax_snapshot_json, @taxSnapshotJson)
+     WHERE id = @id
+  `);
+  for (const row of invoiceTaxRows) {
+    const netAmount = Number(row.net_total) || 0;
+    const taxAmount = isSmallBusiness ? 0 : netAmount * (defaultVatRate / 100);
+    updateInvoiceTax.run({
+      id: row.id,
+      taxMode: row.tax_mode ?? defaultTaxMode,
+      taxSnapshotJson:
+        row.tax_snapshot_json ??
+        JSON.stringify({
+          netAmount,
+          taxAmount,
+          grossAmount: netAmount + taxAmount,
+          taxRate: isSmallBusiness ? 0 : defaultVatRate,
+          taxLabel: isSmallBusiness ? 'Keine Umsatzsteuer' : `MwSt. ${defaultVatRate}%`,
+          taxNote: defaultTaxNote,
+        }),
+    });
+  }
+
+  const offerTaxRows = db.prepare(`
+    SELECT id, tax_mode, tax_snapshot_json, (
+      SELECT COALESCE(SUM(total), 0) FROM offer_items WHERE offer_id = offers.id
+    ) AS net_total
+    FROM offers
+  `).all() as Array<{
+    id: string;
+    tax_mode: string | null;
+    tax_snapshot_json: string | null;
+    net_total: number | null;
+  }>;
+  const updateOfferTax = db.prepare(`
+    UPDATE offers
+       SET tax_mode = COALESCE(NULLIF(tax_mode, ''), @taxMode),
+           tax_snapshot_json = COALESCE(tax_snapshot_json, @taxSnapshotJson)
+     WHERE id = @id
+  `);
+  for (const row of offerTaxRows) {
+    const netAmount = Number(row.net_total) || 0;
+    const taxAmount = isSmallBusiness ? 0 : netAmount * (defaultVatRate / 100);
+    updateOfferTax.run({
+      id: row.id,
+      taxMode: row.tax_mode ?? defaultTaxMode,
+      taxSnapshotJson:
+        row.tax_snapshot_json ??
+        JSON.stringify({
+          netAmount,
+          taxAmount,
+          grossAmount: netAmount + taxAmount,
+          taxRate: isSmallBusiness ? 0 : defaultVatRate,
+          taxLabel: isSmallBusiness ? 'Keine Umsatzsteuer' : `MwSt. ${defaultVatRate}%`,
+          taxNote: defaultTaxNote,
+        }),
+    });
+  }
 
   const nowYear = String(new Date().getFullYear());
   const customerPrefixTemplate =

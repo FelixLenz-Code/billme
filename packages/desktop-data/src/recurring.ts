@@ -11,11 +11,13 @@ import {
 } from '@billme/server-core';
 import type { DocumentNumberKind, RecurringNumberingSettingsShape, SyncRecurringProfileStore } from '@billme/server-core/ports';
 import {
+  calculateInvoiceTaxSnapshot,
   calculateNextRun,
   deleteRecurringProfile as deleteDomainRecurringProfile,
   generateInvoiceFromProfile as generateDomainInvoiceFromProfile,
   listRecurringProfiles as listDomainRecurringProfiles,
   processRecurringRun as processDomainRecurringRun,
+  resolveInvoiceTaxMode,
   shouldRunScheduledRecurring,
   upsertRecurringProfile as upsertDomainRecurringProfile,
   type RecurringResult,
@@ -114,6 +116,9 @@ export interface LegacyRecurringInvoice {
   clientAddress?: string;
   billingAddressJson?: BillingAddress;
   shippingAddressJson?: BillingAddress;
+  taxMode?: DomainInvoice['taxMode'];
+  taxMeta?: DomainInvoice['taxMeta'];
+  taxSnapshot?: DomainInvoice['taxSnapshot'];
   date: string;
   dueDate: string;
   servicePeriod?: string;
@@ -314,6 +319,9 @@ const toLegacyInvoice = (invoice: DomainInvoice): LegacyRecurringInvoice => ({
   clientAddress: invoice.clientAddress,
   billingAddressJson: invoice.billingAddress,
   shippingAddressJson: invoice.shippingAddress,
+  taxMode: invoice.taxMode ?? 'standard_vat',
+  taxMeta: invoice.taxMeta,
+  taxSnapshot: invoice.taxSnapshot,
   date: invoice.date,
   dueDate: invoice.dueDate,
   servicePeriod: invoice.servicePeriod,
@@ -338,6 +346,9 @@ const toDomainInvoice = (scope: TenantScope, invoice: LegacyRecurringInvoice): D
   clientAddress: invoice.clientAddress ?? '',
   billingAddress: toDomainAddress(invoice.billingAddressJson),
   shippingAddress: toDomainAddress(invoice.shippingAddressJson),
+  taxMode: invoice.taxMode ?? 'standard_vat',
+  taxMeta: invoice.taxMeta,
+  taxSnapshot: invoice.taxSnapshot,
   date: invoice.date,
   dueDate: invoice.dueDate,
   servicePeriod: invoice.servicePeriod,
@@ -556,15 +567,30 @@ export const generateInvoiceFromProfile = <
 ): TInvoice => {
   const { scope, dependencies } = createDependencies(db, product, settings, runtime);
   const invoice = generateDomainInvoiceFromProfile(scope, dependencies, toDomainRecurringProfile(scope, profile));
+  const taxMode = resolveInvoiceTaxMode(invoice.taxMode, settings);
+  const taxSnapshot = calculateInvoiceTaxSnapshot(
+    {
+      items: invoice.items,
+      taxMode,
+      taxMeta: invoice.taxMeta,
+    },
+    settings,
+  );
+  const normalizedInvoice: DomainInvoice = {
+    ...invoice,
+    taxMode,
+    taxSnapshot,
+    amount: taxSnapshot.grossAmount,
+  };
 
   runtime.logger?.info?.('Generated invoice from profile', {
     profileId: profile.id,
     profileName: profile.name,
-    invoiceNumber: invoice.number,
-    invoiceId: invoice.id,
+    invoiceNumber: normalizedInvoice.number,
+    invoiceId: normalizedInvoice.id,
   });
 
-  return toLegacyInvoice(invoice) as TInvoice;
+  return toLegacyInvoice(normalizedInvoice) as TInvoice;
 };
 
 export const processRecurringRun = async <

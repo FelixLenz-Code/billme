@@ -14,6 +14,7 @@ import { useArticlesQuery } from '../hooks/useArticles';
 import { useProjectsQuery } from '../hooks/useProjects';
 import { formatAddressMultiline } from '../utils/formatters';
 import { useUiStore } from '../state/uiStore';
+import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from '@billme/server-core/services';
 
 interface InvoiceDocumentEditorProps {
   invoice: Invoice;
@@ -50,6 +51,7 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   const [selectedClientId, setSelectedClientId] = useState<string>(invoice.clientId ?? '');
   const [isNumberLocked, setIsNumberLocked] = useState<boolean>(mode === 'edit');
   const [articleToAddId, setArticleToAddId] = useState<string>('');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const { data: projects = [] } = useProjectsQuery(
     selectedClientId ? { clientId: selectedClientId, includeArchived: false } : undefined,
   );
@@ -175,17 +177,23 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
       });
   };
 
-  const calculateTotals = () => {
-      const net = formData.items.reduce((sum, i) => sum + i.total, 0);
-      const vatRate = effectiveSettings.legal.smallBusinessRule ? 0 : (effectiveSettings.legal.defaultVatRate ?? 0) / 100;
-      return {
-          net,
-          vat: net * vatRate,
-          gross: net + net * vatRate
-      };
+  const taxSnapshot = useMemo(
+    () =>
+      calculateInvoiceTaxSnapshot(
+        {
+          items: formData.items,
+          taxMode: formData.taxMode,
+          taxMeta: formData.taxMeta,
+        },
+        effectiveSettings,
+      ),
+    [formData.items, formData.taxMeta, formData.taxMode, effectiveSettings],
+  );
+  const totals = {
+    net: taxSnapshot.netAmount,
+    vat: taxSnapshot.taxAmount,
+    gross: taxSnapshot.grossAmount,
   };
-
-  const totals = calculateTotals();
 
   return (
     <div className="flex h-full w-full bg-[#f3f4f6] overflow-hidden">
@@ -205,6 +213,11 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                   {templateType === 'offer' ? 'Angebot' : 'Rechnung'} {mode === 'create' ? 'erstellen' : 'bearbeiten'}
                 </h2>
                 <p className="text-gray-500 text-sm">{formData.number}</p>
+                {saveError ? (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    {saveError}
+                  </div>
+                ) : null}
             </div>
 
             {/* Scrollable Form Content */}
@@ -346,6 +359,68 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                             placeholder="Straße, PLZ, Stadt..."
                             className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none resize-none"
                         />
+                        <div className="mt-4 grid grid-cols-1 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Steuer-Modell</label>
+                            <select
+                              value={formData.taxMode ?? resolveInvoiceTaxMode(undefined, effectiveSettings)}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  taxMode: e.target.value as Invoice['taxMode'],
+                                  taxMeta:
+                                    e.target.value === 'custom'
+                                      ? prev.taxMeta ?? { rate: effectiveSettings.legal.defaultVatRate }
+                                      : prev.taxMeta,
+                                }))
+                              }
+                              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
+                            >
+                              <option value="standard_vat">Standard MwSt.</option>
+                              <option value="small_business_19_ustg">Kleinunternehmer (§ 19 UStG)</option>
+                              <option value="custom">Eigene Steuerregel</option>
+                            </select>
+                          </div>
+                          {formData.taxMode === 'custom' && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Steuersatz (%)</label>
+                                <input
+                                  type="number"
+                                  value={formData.taxMeta?.rate ?? effectiveSettings.legal.defaultVatRate}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      taxMeta: {
+                                        ...prev.taxMeta,
+                                        rate: Number(e.target.value) || 0,
+                                      },
+                                    }))
+                                  }
+                                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Bezeichnung</label>
+                                <input
+                                  type="text"
+                                  value={formData.taxMeta?.label ?? ''}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      taxMeta: {
+                                        ...prev.taxMeta,
+                                        label: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  placeholder="z. B. Reverse Charge"
+                                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                     </div>
                 </div>
 
@@ -466,9 +541,12 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                             <span>{formatCurrency(totals.net)}</span>
                         </div>
                         <div className="flex justify-between text-sm text-gray-500">
-                            <span>MwSt ({effectiveSettings.legal.smallBusinessRule ? '0' : effectiveSettings.legal.defaultVatRate}%)</span>
+                            <span>{taxSnapshot.taxLabel} ({taxSnapshot.taxRate}%)</span>
                             <span>{formatCurrency(totals.vat)}</span>
                         </div>
+                        {taxSnapshot.taxNote ? (
+                          <div className="text-xs text-gray-500 pt-1">{taxSnapshot.taxNote}</div>
+                        ) : null}
                         <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-2 mt-2">
                             <span>Gesamtbetrag</span>
                             <span>{formatCurrency(totals.gross)}</span>
@@ -480,7 +558,21 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
             {/* Actions */}
             <div className="p-6 border-t border-gray-200 bg-white animate-enter" style={{ animationDelay: '450ms' }}>
                 <button
-                    onClick={() => onSave(formData)}
+                    onClick={() => {
+                      setSaveError(null);
+                      const resolvedTaxMode = resolveInvoiceTaxMode(formData.taxMode, effectiveSettings);
+                      const normalized: Invoice = {
+                        ...formData,
+                        taxMode: resolvedTaxMode,
+                        taxSnapshot,
+                        amount: taxSnapshot.grossAmount,
+                      };
+                      if (resolvedTaxMode === 'custom' && !normalized.taxMeta?.label?.trim()) {
+                        setSaveError('Bitte gib fuer benutzerdefinierte Steuerregeln eine Bezeichnung an.');
+                        return;
+                      }
+                      onSave(normalized);
+                    }}
                     className="w-full bg-accent text-black font-bold py-3 rounded-xl hover:bg-accent-hover transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent/20 active:scale-95"
                 >
                     <Save size={18} />

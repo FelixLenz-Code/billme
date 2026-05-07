@@ -29,6 +29,23 @@ export const paymentSchema = z.object({
   method: z.string(),
 });
 
+export const invoiceTaxModeSchema = z.enum(['standard_vat', 'small_business_19_ustg', 'custom']);
+
+export const invoiceTaxMetaSchema = z.object({
+  label: z.string().optional(),
+  note: z.string().optional(),
+  rate: z.number().optional(),
+});
+
+export const invoiceTaxSnapshotSchema = z.object({
+  netAmount: z.number(),
+  taxAmount: z.number(),
+  grossAmount: z.number(),
+  taxRate: z.number(),
+  taxLabel: z.string(),
+  taxNote: z.string().optional(),
+});
+
 export const invoiceSchema = z.object({
   id: z.string(),
   clientId: z.string().optional(),
@@ -41,6 +58,9 @@ export const invoiceSchema = z.object({
   clientAddress: z.string().optional(),
   billingAddressJson: z.unknown().optional(),
   shippingAddressJson: z.unknown().optional(),
+  taxMode: invoiceTaxModeSchema.optional(),
+  taxMeta: invoiceTaxMetaSchema.optional(),
+  taxSnapshot: invoiceTaxSnapshotSchema.optional(),
   shareToken: z.string().nullable().optional(),
   sharePublishedAt: z.string().nullable().optional(),
   shareDecision: z.enum(['accepted', 'declined']).nullable().optional(),

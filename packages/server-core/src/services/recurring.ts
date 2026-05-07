@@ -26,6 +26,7 @@ import {
 } from '../ports/index.js';
 import { chooseDefaultBillingAddress, chooseDefaultBillingEmail, formatAddressMultiline } from './clientNumbering.js';
 import { catchMaybePromise, chainMaybePromise, isPromiseLike, mapMaybePromise } from './maybePromise.js';
+import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from './taxMode.js';
 
 export interface RecurringResult {
   generated: number;
@@ -222,16 +223,6 @@ const buildInvoiceItems = (profile: RecurringProfile): Invoice['items'] => {
   });
 };
 
-const buildInvoiceAmount = (
-  items: Invoice['items'],
-  settings: RecurringNumberingSettingsShape,
-): number => {
-  const netTotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-  const vatRate = settings.legal.smallBusinessRule ? 0 : Number(settings.legal.defaultVatRate) || 0;
-  const grossTotal = netTotal + netTotal * (vatRate / 100);
-  return Number.isFinite(grossTotal) ? grossTotal : 0;
-};
-
 const requireActiveClient = (client: Client | null, profile: RecurringProfile): Client => {
   if (!client) {
     throw new Error(`Client ${profile.clientId} not found`);
@@ -265,6 +256,8 @@ const buildInvoiceFromProfile = (
     const billingEmail = chooseDefaultBillingEmail(client.emails ?? []);
     const items = buildInvoiceItems(profile);
     const today = now.toISOString().slice(0, 10);
+    const taxMode = resolveInvoiceTaxMode(undefined, settings);
+    const taxSnapshot = calculateInvoiceTaxSnapshot({ items, taxMode }, settings);
 
     return chainMaybePromise(dependencies.projectPort.ensureDefaultProject(profile.clientId), (project) => ({
       kind: 'invoice',
@@ -279,10 +272,12 @@ const buildInvoiceFromProfile = (
       clientAddress: billingAddress ? formatAddressMultiline(billingAddress) : client.address,
       billingAddress: billingAddress ?? undefined,
       shippingAddress: shippingAddress ?? undefined,
+      taxMode,
+      taxSnapshot,
       date: today,
       dueDate: calculateDueDate(now, settings.legal.paymentTermsDays),
       servicePeriod: servicePeriod.start,
-      amount: buildInvoiceAmount(items, settings),
+      amount: taxSnapshot.grossAmount,
       status: 'draft',
       dunningLevel: 0,
       items,

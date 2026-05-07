@@ -12,6 +12,7 @@ const createInvoice = (): Invoice => ({
   number: 'RE-1',
   client: 'Acme GmbH',
   clientEmail: 'billing@acme.test',
+  taxMode: 'standard_vat',
   date: '2024-01-01',
   dueDate: '2024-01-10',
   amount: 100,

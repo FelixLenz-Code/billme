@@ -71,13 +71,24 @@ import { getInvoiceDunningStatus } from '../services/dunningService';
 import { buildEurCsv, getEurReport, listEurItems, upsertEurItemClassification } from '../services/eurReport';
 import { listAllEurRules, upsertEurRule, deleteEurRule } from '../db/eurRulesRepo';
 import { PRODUCT_PROFILE } from '../productProfile';
+import { calculateInvoiceTaxSnapshot, resolveInvoiceTaxMode } from '@billme/server-core/services';
 
-const computeGrossFromItems = (doc: Invoice, settings: AppSettings): number => {
-  const net = (doc.items ?? []).reduce((acc, it) => acc + (Number(it.total) || 0), 0);
-  const rate = settings.legal.smallBusinessRule ? 0 : Number(settings.legal.defaultVatRate) || 0;
-  const vat = net * (rate / 100);
-  const gross = net + vat;
-  return Number.isFinite(gross) ? gross : 0;
+const normalizeInvoiceTaxData = (doc: Invoice, settings: AppSettings): Invoice => {
+  const taxMode = resolveInvoiceTaxMode(doc.taxMode, settings);
+  const taxSnapshot = calculateInvoiceTaxSnapshot(
+    {
+      items: doc.items ?? [],
+      taxMode,
+      taxMeta: doc.taxMeta,
+    },
+    settings,
+  );
+  return {
+    ...doc,
+    taxMode,
+    taxSnapshot,
+    amount: taxSnapshot.grossAmount,
+  };
 };
 
 const deriveCustomerRef = (doc: Invoice): string => {
@@ -134,11 +145,7 @@ export const registerIpcHandlers = (
   register(ipcMain, 'invoices:upsert', ({ invoice, reason }) => {
     const db = requireDb();
     const settings = requireSettings(db);
-    const computed: Invoice = {
-      ...invoice,
-      amount: computeGrossFromItems(invoice as Invoice, settings),
-    };
-    return upsertInvoice(db, computed, reason);
+    return upsertInvoice(db, normalizeInvoiceTaxData(invoice as Invoice, settings), reason);
   });
 
   register(ipcMain, 'invoices:delete', ({ id, reason }) => {
@@ -155,11 +162,7 @@ export const registerIpcHandlers = (
   register(ipcMain, 'offers:upsert', ({ offer, reason }) => {
     const db = requireDb();
     const settings = requireSettings(db);
-    const computed: Invoice = {
-      ...offer,
-      amount: computeGrossFromItems(offer as Invoice, settings),
-    };
-    return upsertOffer(db, computed, reason);
+    return upsertOffer(db, normalizeInvoiceTaxData(offer as Invoice, settings), reason);
   });
 
   register(ipcMain, 'offers:delete', ({ id, reason }) => {
@@ -281,6 +284,7 @@ export const registerIpcHandlers = (
   register(ipcMain, 'documents:createFromClient', ({ kind, clientId }) => {
     const db = requireDb();
     const normalizedKind = kind === 'offer' ? 'offer' : 'invoice';
+    const settings = requireSettings(db);
 
     const client = getClient(db, clientId);
     if (!client) throw new Error('Client not found');
@@ -323,6 +327,7 @@ export const registerIpcHandlers = (
       clientAddress: billingAddress ? formatAddressMultiline(billingAddress) : '',
       billingAddressJson: billingAddress ?? null,
       shippingAddressJson: shippingAddress ?? null,
+      taxMode: resolveInvoiceTaxMode(undefined, settings),
       date: today,
       dueDate: normalizedKind === 'offer' ? today : '',
       amount: 0,
@@ -332,7 +337,7 @@ export const registerIpcHandlers = (
       history: [],
     };
 
-    return base;
+    return normalizeInvoiceTaxData(base, settings);
   });
 
   register(ipcMain, 'documents:convertOfferToInvoice', ({ offerId }) => {

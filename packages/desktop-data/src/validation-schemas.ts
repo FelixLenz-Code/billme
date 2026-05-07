@@ -140,6 +140,21 @@ export const InvoiceItemSchema = z.object({
 
 export const InvoiceItemsSchema = z.array(InvoiceItemSchema);
 
+export const InvoiceTaxMetaSchema = z.object({
+  label: z.string().optional(),
+  note: z.string().optional(),
+  rate: z.number().optional(),
+});
+
+export const InvoiceTaxSnapshotSchema = z.object({
+  netAmount: z.number(),
+  taxAmount: z.number(),
+  grossAmount: z.number(),
+  taxRate: z.number(),
+  taxLabel: z.string(),
+  taxNote: z.string().optional(),
+});
+
 // Settings schema components
 const CompanySettingsSchema = z.object({
   name: z.string(),

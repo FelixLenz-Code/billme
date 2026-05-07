@@ -96,6 +96,30 @@ export const billingAddressSchema = z.object({
 });
 export type BillingAddress = z.infer<typeof billingAddressSchema>;
 
+export const invoiceTaxModeSchema = z.enum([
+  'standard_vat',
+  'small_business_19_ustg',
+  'custom',
+]);
+export type InvoiceTaxMode = z.infer<typeof invoiceTaxModeSchema>;
+
+export const invoiceTaxMetaSchema = z.object({
+  label: z.string().optional(),
+  note: z.string().optional(),
+  rate: z.number().optional(),
+});
+export type InvoiceTaxMeta = z.infer<typeof invoiceTaxMetaSchema>;
+
+export const invoiceTaxSnapshotSchema = z.object({
+  netAmount: z.number(),
+  taxAmount: z.number(),
+  grossAmount: z.number(),
+  taxRate: z.number(),
+  taxLabel: z.string(),
+  taxNote: z.string().optional(),
+});
+export type InvoiceTaxSnapshot = z.infer<typeof invoiceTaxSnapshotSchema>;
+
 export const clientAddressKindSchema = z.enum(['billing', 'shipping', 'other']);
 export type ClientAddressKind = z.infer<typeof clientAddressKindSchema>;
 
@@ -238,6 +262,9 @@ export const billingDocumentBaseSchema = z.object({
   clientAddress: z.string().optional(),
   billingAddress: billingAddressSchema.optional(),
   shippingAddress: billingAddressSchema.optional(),
+  taxMode: invoiceTaxModeSchema.default('standard_vat'),
+  taxMeta: invoiceTaxMetaSchema.optional(),
+  taxSnapshot: invoiceTaxSnapshotSchema.optional(),
   date: isoDateSchema,
   amount: z.number(),
   items: z.array(billingLineItemSchema).default([]),

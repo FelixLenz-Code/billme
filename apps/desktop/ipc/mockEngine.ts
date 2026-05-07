@@ -13,11 +13,13 @@ import type {
 } from '../types';
 import type { IpcArgs, IpcResult, IpcRouteKey } from './contract';
 import {
+  calculateInvoiceTaxSnapshot,
   chooseDefaultBillingAddress,
   chooseDefaultBillingEmail,
   ensureDefaultProjectForClient as ensureDefaultProjectForClientDomain,
   finalizeDocumentNumber,
   prepareClientForUpsert,
+  resolveInvoiceTaxMode,
   releaseDocumentNumber,
   reserveDocumentNumber,
 } from '@billme/server-core/services';
@@ -576,13 +578,31 @@ const buildMockEurCsv = (report: ReturnType<typeof getMockEurReport>): string =>
   return `\uFEFF${[header, ...rows].join('\n')}`;
 };
 
+const normalizeInvoiceTaxData = (doc: Invoice): Invoice => {
+  const taxMode = resolveInvoiceTaxMode(doc.taxMode, settings);
+  const taxSnapshot = calculateInvoiceTaxSnapshot(
+    {
+      items: doc.items ?? [],
+      taxMode,
+      taxMeta: doc.taxMeta,
+    },
+    settings,
+  );
+  return {
+    ...doc,
+    taxMode,
+    taxSnapshot,
+    amount: taxSnapshot.grossAmount,
+  };
+};
+
 const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<IpcResult<K>> => {
   switch (key) {
     case 'invoices:list':
       return structuredClone(invoices) as IpcResult<K>;
     case 'invoices:upsert': {
       const { invoice } = args as IpcArgs<'invoices:upsert'>;
-      const normalized = structuredClone(invoice) as Invoice;
+      const normalized = normalizeInvoiceTaxData(structuredClone(invoice) as Invoice);
       delete normalized.numberReservationId;
       const idx = invoices.findIndex((i) => i.id === normalized.id);
       if (idx >= 0) invoices[idx] = normalized;
@@ -600,7 +620,7 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<
       return structuredClone(offers) as IpcResult<K>;
     case 'offers:upsert': {
       const { offer } = args as IpcArgs<'offers:upsert'>;
-      const normalized = structuredClone(offer) as Invoice;
+      const normalized = normalizeInvoiceTaxData(structuredClone(offer) as Invoice);
       delete normalized.numberReservationId;
       const idx = offers.findIndex((o) => o.id === normalized.id);
       if (idx >= 0) offers[idx] = normalized;
@@ -771,6 +791,7 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<
         clientAddress: billingAddress ? formatAddressMultiline(billingAddress) : client.address,
         billingAddressJson: billingAddress,
         shippingAddressJson: shippingAddress,
+        taxMode: resolveInvoiceTaxMode(undefined, settings),
         date: today,
         dueDate: kind === 'offer' ? today : '',
         amount: 0,
@@ -780,7 +801,7 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<
         history: [],
       };
 
-      return structuredClone(doc) as IpcResult<K>;
+      return structuredClone(normalizeInvoiceTaxData(doc)) as IpcResult<K>;
     }
     case 'documents:convertOfferToInvoice': {
       const { offerId } = args as IpcArgs<'documents:convertOfferToInvoice'>;
@@ -801,9 +822,10 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<
           ...(offer.history ?? []),
         ],
       };
-      invoices.unshift(invoice);
+      const normalized = normalizeInvoiceTaxData(invoice);
+      invoices.unshift(normalized);
       finalizeNumber(reservation.reservationId, invoice.id);
-      return structuredClone(invoice) as IpcResult<K>;
+      return structuredClone(normalized) as IpcResult<K>;
     }
 
     case 'templates:list': {
