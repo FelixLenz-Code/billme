@@ -262,6 +262,12 @@ const DashboardSettingsSchema = z.object({
   topClientsLimit: z.number().int().min(1).max(20).default(5),
 });
 
+const ExportSettingsSchema = z.object({
+  // Custom directory for exported PDF/ZUGFeRD documents.
+  // Empty string means the default app location (userData/exports).
+  outputDir: z.string().default(''),
+});
+
 export const SettingsSchema = z.object({
   company: CompanySettingsSchema,
   finance: FinanceSettingsSchema,
@@ -298,6 +304,7 @@ export const SettingsSchema = z.object({
     recentPaymentsLimit: 5,
     topClientsLimit: 5,
   }),
+  export: ExportSettingsSchema.optional().default({ outputDir: '' }),
   onboardingCompleted: z.boolean().optional(),
 });
 

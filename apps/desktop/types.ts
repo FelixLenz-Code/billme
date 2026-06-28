@@ -163,6 +163,11 @@ export interface AppSettings {
     recentPaymentsLimit: number;
     topClientsLimit: number;
   };
+  export?: {
+    // Custom directory for exported PDF/ZUGFeRD documents.
+    // Empty string means the default app location (userData/exports).
+    outputDir: string;
+  };
   onboardingCompleted?: boolean;
 }
 

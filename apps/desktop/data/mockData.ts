@@ -110,6 +110,9 @@ export const MOCK_SETTINGS: AppSettings = {
     topCategoriesLimit: 5,
     recentPaymentsLimit: 5,
     topClientsLimit: 5,
+  },
+  export: {
+    outputDir: '',
   }
 };
 

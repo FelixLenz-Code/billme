@@ -1002,6 +1002,9 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<
     case 'dialog:pickCsv':
       return { path: 'mock://imports/sample.csv' } as IpcResult<K>;
 
+    case 'dialog:pickDirectory':
+      return { path: null } as IpcResult<K>;
+
     case 'finance:importPreview': {
       const payload = args as IpcArgs<'finance:importPreview'>;
       const nowDate = toIsoDate(new Date());

@@ -9,6 +9,14 @@ const ensureDir = (dir: string) => {
   fs.mkdirSync(dir, { recursive: true });
 };
 
+// Resolve the directory exported documents are written to. A non-empty
+// `exportDir` (configured in Settings) wins, otherwise we fall back to the
+// default location inside the app's userData folder.
+const resolveExportsDir = (userDataPath: string, exportDir?: string) => {
+  const custom = exportDir?.trim();
+  return custom ? path.resolve(custom) : path.join(userDataPath, 'exports');
+};
+
 const sanitizeFilePart = (value: string) => {
   return value
     .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_')
@@ -33,8 +41,9 @@ export const exportPdf = async (params: {
   id: string;
   suggestedName: string;
   userDataPath: string;
+  exportDir?: string;
 }): Promise<{ path: string; bytes: Uint8Array }> => {
-  const exportsDir = path.join(params.userDataPath, 'exports');
+  const exportsDir = resolveExportsDir(params.userDataPath, params.exportDir);
   ensureDir(exportsDir);
 
   const fileName = `${sanitizeFilePart(params.suggestedName || `${params.kind}-${params.id}`)}.pdf`;
@@ -92,8 +101,9 @@ export const exportEurPdf = async (params: {
   from?: string;
   to?: string;
   userDataPath: string;
+  exportDir?: string;
 }): Promise<{ path: string }> => {
-  const exportsDir = path.join(params.userDataPath, 'exports');
+  const exportsDir = resolveExportsDir(params.userDataPath, params.exportDir);
   ensureDir(exportsDir);
 
   const fileName = `${sanitizeFilePart(`anlage-euer-${params.taxYear}`)}.pdf`;

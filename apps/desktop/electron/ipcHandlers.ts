@@ -137,6 +137,20 @@ export const registerIpcHandlers = (
   const getUserDataPath = deps.getUserDataPath;
   const getMainWindow = deps.getMainWindow;
 
+  // Configured custom export directory ('' = default userData/exports).
+  const getExportDir = (db: Database.Database): string => {
+    try {
+      return getSettings(db)?.export?.outputDir?.trim() ?? '';
+    } catch {
+      return '';
+    }
+  };
+  // Absolute directory exported documents are written to / opened from.
+  const resolveExportsDir = (db: Database.Database, userDataPath: string): string => {
+    const custom = getExportDir(db);
+    return custom ? path.resolve(custom) : path.resolve(path.join(userDataPath, 'exports'));
+  };
+
   register(ipcMain, 'invoices:list', () => {
     const db = requireDb();
     return listInvoices(db);
@@ -397,6 +411,7 @@ export const registerIpcHandlers = (
         id,
         suggestedName: `${offer.number || 'offer'}-${offer.client || id}`,
         userDataPath,
+        exportDir: getExportDir(db),
       });
       return { path: res.path };
     }
@@ -408,6 +423,7 @@ export const registerIpcHandlers = (
       id,
       suggestedName: `${invoice.number || 'invoice'}-${invoice.client || id}`,
       userDataPath,
+      exportDir: getExportDir(db),
     });
     const settings = requireSettings(db);
     if (settings.eInvoice?.enabled) {
@@ -460,11 +476,13 @@ export const registerIpcHandlers = (
   });
 
   register(ipcMain, 'shell:openPath', async ({ path: targetPath }) => {
+    const db = requireDb();
     const userDataPath = getUserDataPath();
     const resolved = path.resolve(targetPath);
     const allowedRoots = [
       path.resolve(path.join(userDataPath, 'exports')),
       path.resolve(path.join(userDataPath, 'backups')),
+      resolveExportsDir(db, userDataPath),
     ];
 
     if (!allowedRoots.some((root) => resolved === root || resolved.startsWith(root + path.sep))) {
@@ -477,8 +495,9 @@ export const registerIpcHandlers = (
   });
 
   register(ipcMain, 'shell:openExportsDir', async () => {
+    const db = requireDb();
     const userDataPath = getUserDataPath();
-    const exportsDir = path.resolve(path.join(userDataPath, 'exports'));
+    const exportsDir = resolveExportsDir(db, userDataPath);
     ensureDir(exportsDir);
 
     const result = await shell.openPath(exportsDir);
@@ -508,6 +527,15 @@ export const registerIpcHandlers = (
         { name: 'CSV', extensions: ['csv', 'txt'] },
         { name: 'All files', extensions: ['*'] },
       ],
+    });
+    if (res.canceled || res.filePaths.length === 0) return { path: null };
+    return { path: res.filePaths[0] ?? null };
+  });
+
+  register(ipcMain, 'dialog:pickDirectory', async ({ title }) => {
+    const res = await dialog.showOpenDialog({
+      title: title ?? 'Ordner auswählen',
+      properties: ['openDirectory', 'createDirectory'],
     });
     if (res.canceled || res.filePaths.length === 0) return { path: null };
     return { path: res.filePaths[0] ?? null };
@@ -658,6 +686,7 @@ export const registerIpcHandlers = (
             id: offerId,
             suggestedName: `${offer.number || 'offer'}-${offer.client || offerId}`,
             userDataPath: getUserDataPath(),
+            exportDir: getExportDir(db),
           });
 
           return portalClient.publishOffer({
@@ -712,6 +741,7 @@ export const registerIpcHandlers = (
       id: invoiceId,
       suggestedName: `${invoice.number || 'invoice'}-${invoice.client || invoiceId}`,
       userDataPath: getUserDataPath(),
+      exportDir: getExportDir(db),
     });
 
     return portalClient.publishInvoice({
@@ -850,7 +880,13 @@ export const registerIpcHandlers = (
     // Generate PDF
     let pdfPath: string;
     try {
-      const res = await exportPdf({ kind: documentType, id: documentId }, db, userDataPath);
+      const res = await exportPdf({
+        kind: documentType,
+        id: documentId,
+        suggestedName: `${document.number || documentType}-${document.client || documentId}`,
+        userDataPath,
+        exportDir: getExportDir(db),
+      });
       pdfPath = res.path;
     } catch (e) {
       return {
@@ -1124,8 +1160,9 @@ export const registerIpcHandlers = (
   });
 
   register(ipcMain, 'eur:exportPdf', async ({ taxYear, from, to }) => {
+    const db = requireDb();
     const userDataPath = getUserDataPath();
-    return exportEurPdf({ taxYear, from, to, userDataPath });
+    return exportEurPdf({ taxYear, from, to, userDataPath, exportDir: getExportDir(db) });
   });
 
   register(ipcMain, 'eur:listRules', ({ taxYear }) => {

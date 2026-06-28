@@ -388,6 +388,13 @@ const dialogPickCsvResultSchema = z.object({
   path: z.string().nullable(),
 });
 
+const dialogPickDirectoryArgsSchema = z.object({
+  title: z.string().optional(),
+});
+const dialogPickDirectoryResultSchema = z.object({
+  path: z.string().nullable(),
+});
+
 const financeImportPreviewResultSchema = z.object({
   path: z.string(),
   fileName: z.string(),
@@ -676,6 +683,12 @@ export const ipcRoutes = {
     channel: 'dialog:pickCsv',
     args: dialogPickCsvArgsSchema,
     result: dialogPickCsvResultSchema,
+  },
+
+  'dialog:pickDirectory': {
+    channel: 'dialog:pickDirectory',
+    args: dialogPickDirectoryArgsSchema,
+    result: dialogPickDirectoryResultSchema,
   },
 
   'finance:importPreview': {

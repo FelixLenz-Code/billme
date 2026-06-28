@@ -1579,6 +1579,58 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4">
+              <div>
+                <h4 className="text-lg font-bold text-gray-900">Speicherort für Dokumente</h4>
+                <p className="text-sm text-gray-500">
+                  Ordner, in den erstellte Rechnungs-/Angebots-PDFs (inkl. ZUGFeRD) gespeichert werden.
+                  Leer = Standardordner der App. Änderungen gelten nach dem Speichern.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  value={settings.export?.outputDir ?? ''}
+                  onChange={(e) => updateNested('export', 'outputDir', e.target.value)}
+                  placeholder="Standardordner der App (userData/exports)"
+                  className="flex-1 bg-white border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await ipc.dialog.pickDirectory({ title: 'Export-Ordner wählen' });
+                      if (res.path) updateNested('export', 'outputDir', res.path);
+                    } catch (e) {
+                      alert(`Ordnerauswahl fehlgeschlagen: ${String(e)}`);
+                    }
+                  }}
+                  className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors whitespace-nowrap"
+                >
+                  Ordner wählen
+                </button>
+                <button
+                  onClick={() => updateNested('export', 'outputDir', '')}
+                  disabled={!settings.export?.outputDir}
+                  className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Zurücksetzen
+                </button>
+              </div>
+
+              <button
+                onClick={async () => {
+                  try {
+                    await ipc.shell.openExportsDir();
+                  } catch (e) {
+                    alert(`Ordner konnte nicht geöffnet werden: ${String(e)}`);
+                  }
+                }}
+                className="px-5 py-3 rounded-xl font-bold bg-black text-white hover:bg-gray-800 transition-colors"
+              >
+                Ordner öffnen
+              </button>
+            </div>
           </div>
         );
       default:
