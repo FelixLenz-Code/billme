@@ -18,6 +18,17 @@ This fork diverges from upstream with the following fixes (desktop app / Linux A
 - **Example/seed data no longer reappears after a restart.** The mock/example data seeding in `apps/desktop/electron/main.ts` could run on startup and refill emptied tables (delete → restart → data back). The dev-only `isDev` guard is now additionally gated behind `!app.isPackaged`, so a packaged build (e.g. the AppImage) never seeds example data.
 - **Live preview totals/VAT update immediately.** In the document editor (`apps/desktop/components/InvoiceDocumentEditor.tsx`) the preview preferred a stored `taxSnapshot`, which froze the totals/VAT block until the document was saved and reopened. The preview now always uses the freshly computed tax snapshot, matching the form summary and what gets saved.
 - **Configurable export folder for documents.** Settings → System now has a *"Speicherort für Dokumente"* option to choose the directory where exported invoice/offer PDFs (incl. ZUGFeRD) are written. Empty means the default app location (`userData/exports`). Implemented via a new `export.outputDir` setting, a `dialog:pickDirectory` IPC route, and resolution in `apps/desktop/electron/pdfExport.ts` / `ipcHandlers.ts`. (Also fixes a pre-existing bug where sending a document by e-mail with a PDF attachment passed `userDataPath` incorrectly.)
+- **Export folder setting now actually takes effect.** The `export.outputDir` value was silently dropped by the IPC contract schema (`appSettingsSchema` in `packages/desktop-contracts`) on save and load — zod strips unknown keys — so the chosen folder had no effect. The field is now part of the schema and is honored on every export. As part of this, IPC client argument types use the schema *input* type (`z.input`) so fields with defaults stay optional for callers.
+- **Service period is now a month + year (`Leistungszeitraum`).** The service-date field accepts only month/year (`type="month"`), is shown on the invoice as e.g. *"Januar 2026"*, and the label was renamed from *Leistungsdatum* to *Leistungszeitraum* (editor + template). A startup migration updates the label in already-saved templates.
+- **Invoice/offer templates can be deleted.** A delete button was added to the Templates view (the backend delete route already existed but had no UI). Deleting the active template clears its active assignment automatically.
+- **Pick a template when creating a document.** The document editor now has a *"Vorlage"* selector to choose which invoice/offer template to use; the choice drives both the live preview and the exported PDF.
+- **Recording a full payment marks the invoice as paid.** Entering a payment via *Zahlungseingang* that covers the gross total now sets the status to `paid` automatically (and reverts to `open` if a payment is later reduced or deleted). Previously the status stayed `open`.
+- **Backup & restore with native file selection.** Restore has a *"Datei wählen"* open dialog and accepts backups from any location (validated by file type and SQLite header instead of a fixed folder); *"Speichern unter…"* lets you choose where to write a backup (new `db:backupTo` route). A confirmation prompt was added before a restore overwrites current data.
+- **Customizable default e-mail text with variables.** Settings → E-Mail lets you edit the default subject and body using placeholders such as `{{document.number}}`, `{{document.total}}`, `{{client.name}}`, `{{client.contact}}` (recipient contact person), and `{{company.name}}`/`{{company.owner}}`. Placeholders are resolved when the send dialog opens.
+- **Audit *Verify* shows a visible result.** The integrity-check outcome is now rendered as an in-app banner (valid / inconsistent with the list of errors) instead of an unreliable native dialog, including a loading state.
+- **Responsive top navigation & dashboard layout.** The top navbar no longer overlaps the logo/controls when the window is narrow (sides are fixed-width-free, the nav centers and scrolls horizontally when needed). The dashboard *"Top Einnahmequellen"* amounts no longer wrap or clip on long values.
+- **Guard against non-finite recurring totals.** Recurring invoice generation now clamps a non-finite gross total to `0` (`packages/desktop-data/src/recurring.ts`), fixing a failing test.
+- **"Open file/folder" actions fail gracefully.** `shell:openPath` calls (e.g. *PDF öffnen*) are wrapped so a failure shows a toast instead of crashing into a fatal error overlay.
 
 Check out a web-hosted demo of the app here: [Demo](https://demo.getbillme.com/)).
 
@@ -33,6 +44,8 @@ PLEASE NOTE: This is still a Beta-Version. Expect some minor issues and please r
 - Bank transaction matching workflow to link payments and automatically update invoice payment status
 - Client management with multiple contacts/addresses plus client-level revenue and outstanding metrics
 - German-focused settings including payment terms, numbering, and optional ZUGFeRD EN16931 e-invoice export
+- Customizable default e-mail subject/body with document and client placeholders
+- Database backup & restore with native file selection
 - Public offer portal API for publishing offers/invoices, customer decision flows, and PDF access links
 
 ## GoBD
