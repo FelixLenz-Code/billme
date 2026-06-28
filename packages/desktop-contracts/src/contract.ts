@@ -356,6 +356,7 @@ const secretDeleteSchema = z.object({ key: secretKeySchema });
 const secretHasSchema = z.object({ key: secretKeySchema });
 
 const dbRestoreSchema = z.object({ path: z.string().min(1) });
+const dbBackupToSchema = z.object({ path: z.string().min(1) });
 const dbBackupResultSchema = z.object({ path: z.string().min(1) });
 const dbRestoreResultSchema = z.object({ ok: z.boolean(), verification: auditVerifyResultSchema });
 
@@ -392,6 +393,21 @@ const dialogPickDirectoryArgsSchema = z.object({
   title: z.string().optional(),
 });
 const dialogPickDirectoryResultSchema = z.object({
+  path: z.string().nullable(),
+});
+
+const dialogPickFileArgsSchema = z.object({
+  title: z.string().optional(),
+});
+const dialogPickFileResultSchema = z.object({
+  path: z.string().nullable(),
+});
+
+const dialogPickSaveFileArgsSchema = z.object({
+  title: z.string().optional(),
+  defaultName: z.string().optional(),
+});
+const dialogPickSaveFileResultSchema = z.object({
   path: z.string().nullable(),
 });
 
@@ -691,6 +707,18 @@ export const ipcRoutes = {
     result: dialogPickDirectoryResultSchema,
   },
 
+  'dialog:pickFile': {
+    channel: 'dialog:pickFile',
+    args: dialogPickFileArgsSchema,
+    result: dialogPickFileResultSchema,
+  },
+
+  'dialog:pickSaveFile': {
+    channel: 'dialog:pickSaveFile',
+    args: dialogPickSaveFileArgsSchema,
+    result: dialogPickSaveFileResultSchema,
+  },
+
   'finance:importPreview': {
     channel: 'finance:importPreview',
     args: financeImportPreviewSchema,
@@ -813,6 +841,11 @@ export const ipcRoutes = {
   'db:backup': {
     channel: 'db:backup',
     args: z.undefined(),
+    result: dbBackupResultSchema,
+  },
+  'db:backupTo': {
+    channel: 'db:backupTo',
+    args: dbBackupToSchema,
     result: dbBackupResultSchema,
   },
   'db:restore': {

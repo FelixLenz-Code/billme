@@ -429,6 +429,19 @@ export const runMigrations = (db: Database.Database): void => {
       AND client_id <> '';
   `);
 
+  // Vorlagen: Label "Leistungsdatum" -> "Leistungszeitraum" (idempotent;
+  // "Leistungszeitraum" enthält "Leistungsdatum" nicht, daher mehrfach sicher).
+  try {
+    db.prepare(
+      `UPDATE templates
+          SET elements_json = REPLACE(elements_json, 'Leistungsdatum', 'Leistungszeitraum')
+        WHERE elements_json LIKE '%Leistungsdatum%'`,
+    ).run();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes('no such table')) throw e;
+  }
+
   db.exec(`
       CREATE TABLE IF NOT EXISTS import_batches (
         id TEXT PRIMARY KEY,

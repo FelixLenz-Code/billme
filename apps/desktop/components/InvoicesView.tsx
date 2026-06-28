@@ -15,6 +15,12 @@ import { useDeleteInvoiceMutation, useInvoicesQuery, useUpsertInvoiceMutation } 
 import { useDeleteOfferMutation, useOffersQuery, useUpsertOfferMutation } from '../hooks/useOffers';
 import { useSettingsQuery } from '../hooks/useSettings';
 import { ipc } from '../ipc/client';
+import {
+  DEFAULT_EMAIL_BODY,
+  DEFAULT_EMAIL_SUBJECT,
+  buildEmailContext,
+  resolveEmailPlaceholders,
+} from '../utils/emailTemplate';
 import { useQueryClient } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
 import { Spinner } from './Spinner';
@@ -386,13 +392,13 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   // --- Email Logic ---
   const handleOpenEmail = () => {
       if(!selectedDocument) return;
-      const companyName = settings.company?.name?.trim() || 'Ihr Unternehmen';
-      const contactPerson = settings.company?.owner?.trim();
-      const signature = contactPerson ? `${contactPerson}\n${companyName}` : companyName;
+      const ctx = buildEmailContext(selectedDocument, documentType, settings);
+      const subjectTemplate = settings.email?.defaultSubject?.trim() || DEFAULT_EMAIL_SUBJECT;
+      const bodyTemplate = settings.email?.defaultBody?.trim() || DEFAULT_EMAIL_BODY;
       setEmailData({
           to: selectedDocument.clientEmail,
-          subject: `${documentType === 'invoice' ? 'Rechnung' : 'Angebot'} ${selectedDocument.number}`,
-          message: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${documentType === 'invoice' ? 'Ihre Rechnung' : 'Ihr Angebot'} ${selectedDocument.number}.\n\nMit freundlichen Grüßen,\n${signature}`
+          subject: resolveEmailPlaceholders(subjectTemplate, ctx),
+          message: resolveEmailPlaceholders(bodyTemplate, ctx),
       });
       setIsEmailModalOpen(true);
   };

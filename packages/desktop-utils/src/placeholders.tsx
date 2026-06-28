@@ -131,6 +131,18 @@ const formatDate = (dateString?: string) => {
   return new Date(dateString).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+// Formatiert einen Leistungszeitraum als Monat + Jahr, z.B. "Januar 2026".
+// Akzeptiert "YYYY-MM" (aus dem Monats-Picker) oder ein vollständiges Datum.
+const formatMonthYear = (value?: string) => {
+  if (!value) return '';
+  const match = /^(\d{4})-(\d{2})/.exec(value);
+  if (!match) return value;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return value;
+  return new Date(year, monthIndex, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+};
+
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
 };
@@ -181,7 +193,7 @@ export const replacePlaceholders = (text: string, invoice: InvoiceLike, settings
     'invoice.number': invoice.number,
     'invoice.date': formatDate(invoice.date),
     'invoice.dueDate': formatDate(invoice.dueDate),
-    'invoice.servicePeriod': invoice.servicePeriod ? formatDate(invoice.servicePeriod) : formatDate(invoice.date),
+    'invoice.servicePeriod': formatMonthYear(invoice.servicePeriod || invoice.date),
     'client.company': invoice.client,
     'client.number': invoice.clientNumber || '',
     'client.address': invoice.clientAddress || '',

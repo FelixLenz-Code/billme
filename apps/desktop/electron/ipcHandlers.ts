@@ -532,6 +532,32 @@ export const registerIpcHandlers = (
     return { path: res.filePaths[0] ?? null };
   });
 
+  register(ipcMain, 'dialog:pickFile', async ({ title }) => {
+    const res = await dialog.showOpenDialog({
+      title: title ?? 'Datei auswählen',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Datenbank-Sicherung', extensions: ['sqlite', 'db'] },
+        { name: 'Alle Dateien', extensions: ['*'] },
+      ],
+    });
+    if (res.canceled || res.filePaths.length === 0) return { path: null };
+    return { path: res.filePaths[0] ?? null };
+  });
+
+  register(ipcMain, 'dialog:pickSaveFile', async ({ title, defaultName }) => {
+    const res = await dialog.showSaveDialog({
+      title: title ?? 'Speichern unter',
+      defaultPath: defaultName,
+      filters: [
+        { name: 'Datenbank-Sicherung', extensions: ['sqlite'] },
+        { name: 'Alle Dateien', extensions: ['*'] },
+      ],
+    });
+    if (res.canceled || !res.filePath) return { path: null };
+    return { path: res.filePath };
+  });
+
   register(ipcMain, 'dialog:pickDirectory', async ({ title }) => {
     const res = await dialog.showOpenDialog({
       title: title ?? 'Ordner auswählen',
@@ -803,15 +829,24 @@ export const registerIpcHandlers = (
     return { path: dest };
   });
 
+  register(ipcMain, 'db:backupTo', async ({ path: targetPath }) => {
+    const db = requireDb();
+    const resolved = path.resolve(targetPath);
+    if (!/\.(sqlite|db)$/i.test(resolved)) {
+      throw new Error('Backup-Ziel muss auf .sqlite oder .db enden');
+    }
+    ensureDir(path.dirname(resolved));
+    await backupSqlite(db, resolved);
+    return { path: resolved };
+  });
+
   register(ipcMain, 'db:restore', ({ path: restorePath }) => {
     const userDataPath = getUserDataPath();
-    const backupsDir = path.resolve(path.join(userDataPath, 'backups'));
     const resolved = path.resolve(restorePath);
     const allowedExt = /\.(sqlite|db)$/i.test(resolved);
     if (!allowedExt) throw new Error('Restore expects a .sqlite or .db backup file');
-    if (!(resolved === backupsDir || resolved.startsWith(backupsDir + path.sep))) {
-      throw new Error('Refusing to restore from outside backups directory');
-    }
+    // Die Datei darf vom Nutzer frei gewählt werden; Sicherheit wird über
+    // Dateityp- und SQLite-Header-Prüfung gewährleistet (nicht über den Ordner).
     const stat = fs.lstatSync(resolved);
     if (!stat.isFile() || stat.isSymbolicLink()) {
       throw new Error('Restore path must be a regular file');

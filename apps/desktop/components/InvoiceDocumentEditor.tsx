@@ -306,7 +306,7 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">Leistungsdatum</label>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Leistungszeitraum</label>
                             <input
                                 type="month"
                                 value={(formData.servicePeriod || '').slice(0, 7)}

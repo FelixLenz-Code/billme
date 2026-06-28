@@ -9,6 +9,7 @@ import { Button } from '@billme/ui';
 import { AppSettings, DunningLevel } from '../types';
 import { MOCK_SETTINGS } from '../data/mockData';
 import { ipc } from '../ipc/client';
+import { DEFAULT_EMAIL_BODY, DEFAULT_EMAIL_SUBJECT, EMAIL_VARIABLES } from '../utils/emailTemplate';
 import { useSetSettingsMutation, useSettingsQuery } from '../hooks/useSettings';
 import { useQueryClient } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
@@ -974,6 +975,55 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Standard-E-Mail-Text */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4">
+              <div>
+                <h4 className="font-bold">Standard-E-Mail-Text</h4>
+                <p className="text-sm text-gray-500">
+                  Betreff und Nachricht, die beim Versand vorausgefüllt werden. Platzhalter werden automatisch ersetzt.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">Betreff</label>
+                <input
+                  type="text"
+                  value={settings.email.defaultSubject ?? ''}
+                  onChange={(e) => updateNested('email', 'defaultSubject', e.target.value)}
+                  placeholder={DEFAULT_EMAIL_SUBJECT}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-accent outline-none transition-shadow"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">Nachricht</label>
+                <textarea
+                  value={settings.email.defaultBody ?? ''}
+                  onChange={(e) => updateNested('email', 'defaultBody', e.target.value)}
+                  placeholder={DEFAULT_EMAIL_BODY}
+                  rows={8}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-accent outline-none transition-shadow resize-y"
+                />
+                <p className="text-xs text-gray-500 mt-1">Leer lassen, um den Standardtext zu verwenden.</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-500 mb-2">Verfügbare Variablen (klicken zum Kopieren):</p>
+                <div className="flex flex-wrap gap-2">
+                  {EMAIL_VARIABLES.map((v) => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(`{{${v.key}}}`).catch(() => {});
+                      }}
+                      title={`${v.label} – {{${v.key}}}`}
+                      className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-mono transition-colors"
+                    >
+                      {`{{${v.key}}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         );
       case 'dunning': {
@@ -1506,8 +1556,19 @@ export const SettingsView: React.FC = () => {
               <div className="flex gap-3">
                 <button
                   onClick={async () => {
-                    const result = await ipc.audit.verify();
-                    alert(JSON.stringify(result, null, 2));
+                    try {
+                      const result = await ipc.audit.verify();
+                      if (result.ok) {
+                        alert(`Audit-Log gültig.\n${result.count} Einträge geprüft, keine Fehler gefunden.`);
+                      } else {
+                        alert(
+                          `Audit-Log INKONSISTENT.\n${result.count} Einträge geprüft.\n` +
+                            `Fehler:\n${(result.errors ?? []).map((err) => `#${err.sequence}: ${err.message}`).join('\n') || 'Unbekannt'}`,
+                        );
+                      }
+                    } catch (e) {
+                      alert(`Audit-Prüfung fehlgeschlagen: ${String(e)}`);
+                    }
                   }}
                   className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors"
                 >
@@ -1551,12 +1612,32 @@ export const SettingsView: React.FC = () => {
                       alert(`Backup fehlgeschlagen: ${String(e)}`);
                     }
                   }}
-                  className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors"
+                  className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors whitespace-nowrap"
                 >
                   Backup erstellen
                 </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const ts = new Date().toISOString().slice(0, 10);
+                      const picked = await ipc.dialog.pickSaveFile({
+                        title: 'Backup speichern unter',
+                        defaultName: `billme-backup-${ts}.sqlite`,
+                      });
+                      if (!picked.path) return;
+                      const res = await ipc.db.backupTo({ path: picked.path });
+                      alert(`Backup gespeichert:\n${res.path}`);
+                    } catch (e) {
+                      alert(`Backup fehlgeschlagen: ${String(e)}`);
+                    }
+                  }}
+                  className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors whitespace-nowrap"
+                >
+                  Speichern unter…
+                </button>
+              </div>
 
-                <div className="flex-1 flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     value={backupPath}
                     onChange={(e) => setBackupPath(e.target.value)}
@@ -1566,17 +1647,37 @@ export const SettingsView: React.FC = () => {
                   <button
                     onClick={async () => {
                       try {
+                        const picked = await ipc.dialog.pickFile({ title: 'Sicherung auswählen' });
+                        if (picked.path) setBackupPath(picked.path);
+                      } catch (e) {
+                        alert(`Dateiauswahl fehlgeschlagen: ${String(e)}`);
+                      }
+                    }}
+                    className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors whitespace-nowrap"
+                  >
+                    Datei wählen
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!backupPath.trim()) {
+                        alert('Bitte zuerst eine Sicherungsdatei auswählen.');
+                        return;
+                      }
+                      const ok = window.confirm(
+                        'Achtung: Beim Wiederherstellen werden die aktuellen Daten durch die gewählte Sicherung ersetzt.\n\nFortfahren?'
+                      );
+                      if (!ok) return;
+                      try {
                         const res = await ipc.db.restore({ path: backupPath.trim() });
                         alert(`Restore abgeschlossen:\n${JSON.stringify(res, null, 2)}`);
                       } catch (e) {
                         alert(`Restore fehlgeschlagen: ${String(e)}`);
                       }
                     }}
-                    className="px-5 py-3 rounded-xl font-bold bg-black text-white hover:bg-gray-800 transition-colors"
+                    className="px-5 py-3 rounded-xl font-bold bg-black text-white hover:bg-gray-800 transition-colors whitespace-nowrap"
                   >
                     Restore
                   </button>
-                </div>
               </div>
             </div>
 

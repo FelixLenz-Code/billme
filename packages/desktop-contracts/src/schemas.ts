@@ -453,6 +453,8 @@ export const appSettingsSchema = z.object({
       smtpUser: z.string().default(''),
       fromName: z.string().default(''),
       fromEmail: z.string().default(''),
+      defaultSubject: z.string().optional(),
+      defaultBody: z.string().optional(),
     })
     .default({
       provider: 'none',

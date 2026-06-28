@@ -71,7 +71,7 @@ export const INITIAL_INVOICE_TEMPLATE: InvoiceElement[] = [
     x: 125 * MM_TO_PX, // Right side block
     y: 50 * MM_TO_PX, // Aligned with address block
     zIndex: 10,
-    content: 'Rechnungs-Nr: {{invoice.number}}\nDatum: {{invoice.date}}\nLeistungsdatum: {{invoice.servicePeriod}}\nKunden-Nr: {{client.number}}',
+    content: 'Rechnungs-Nr: {{invoice.number}}\nDatum: {{invoice.date}}\nLeistungszeitraum: {{invoice.servicePeriod}}\nKunden-Nr: {{client.number}}',
     style: { ...DEFAULT_TEXT_STYLE, fontSize: 11, textAlign: 'right', width: 250, height: 100, color: '#333333' },
     label: 'invoice_meta'
   },

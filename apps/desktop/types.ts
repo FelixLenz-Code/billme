@@ -147,6 +147,10 @@ export interface AppSettings {
     fromName: string;
     fromEmail: string;
     // resendApiKey is stored in OS keychain as 'resend.apiKey'
+    // Default subject/body for the send dialog. Support placeholders like
+    // {{document.number}}, {{client.name}}, {{company.name}} (see resolveEmailPlaceholders).
+    defaultSubject?: string;
+    defaultBody?: string;
   };
   automation: {
     dunningEnabled: boolean;

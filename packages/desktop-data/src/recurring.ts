@@ -580,7 +580,7 @@ export const generateInvoiceFromProfile = <
     ...invoice,
     taxMode,
     taxSnapshot,
-    amount: taxSnapshot.grossAmount,
+    amount: Number.isFinite(taxSnapshot.grossAmount) ? taxSnapshot.grossAmount : 0,
   };
 
   runtime.logger?.info?.('Generated invoice from profile', {

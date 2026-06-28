@@ -990,6 +990,7 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcInput<K>): Promise
     }
 
     case 'db:backup':
+    case 'db:backupTo':
       return { path: 'mock://backup/billme-demo.sqlite' } as IpcResult<K>;
     case 'db:restore':
       return { ok: true, verification: { ok: true, errors: [], count: 0, headHash: null } } as IpcResult<K>;
@@ -1003,6 +1004,8 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcInput<K>): Promise
       return { path: 'mock://imports/sample.csv' } as IpcResult<K>;
 
     case 'dialog:pickDirectory':
+    case 'dialog:pickFile':
+    case 'dialog:pickSaveFile':
       return { path: null } as IpcResult<K>;
 
     case 'finance:importPreview': {
