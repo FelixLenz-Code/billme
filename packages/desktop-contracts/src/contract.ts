@@ -888,5 +888,8 @@ export const ipcRoutes = {
 } as const satisfies Record<string, RouteDef<z.ZodTypeAny, z.ZodTypeAny>>;
 
 export type IpcRouteKey = keyof typeof ipcRoutes;
+// Output (post-parse) shape handlers receive after defaults/transforms are applied.
 export type IpcArgs<K extends IpcRouteKey> = z.infer<(typeof ipcRoutes)[K]['args']>;
+// Input shape callers provide: fields with schema defaults are optional here.
+export type IpcInput<K extends IpcRouteKey> = z.input<(typeof ipcRoutes)[K]['args']>;
 export type IpcResult<K extends IpcRouteKey> = z.infer<(typeof ipcRoutes)[K]['result']>;

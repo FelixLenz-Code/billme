@@ -68,7 +68,7 @@ export const invoiceSchema = z.object({
   clientAddress: z.string().optional(),
   billingAddressJson: z.unknown().optional(),
   shippingAddressJson: z.unknown().optional(),
-  taxMode: invoiceTaxModeSchema.optional(),
+  taxMode: invoiceTaxModeSchema.optional().default('standard_vat'),
   taxMeta: invoiceTaxMetaSchema.optional(),
   taxSnapshot: invoiceTaxSnapshotSchema.optional(),
   shareToken: z.string().nullable().optional(),
@@ -493,6 +493,13 @@ export const appSettingsSchema = z.object({
       recentPaymentsLimit: 5,
       topClientsLimit: 5,
     }),
+  export: z
+    .object({
+      // Custom directory for exported PDF/ZUGFeRD documents.
+      // Empty string means the default app location (userData/exports).
+      outputDir: z.string().default(''),
+    })
+    .optional(),
   onboardingCompleted: z.boolean().optional(),
 });
 

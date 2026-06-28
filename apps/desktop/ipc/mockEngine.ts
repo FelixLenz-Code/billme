@@ -11,7 +11,7 @@ import type {
   RecurringProfile,
   Transaction,
 } from '../types';
-import type { IpcArgs, IpcResult, IpcRouteKey } from './contract';
+import type { IpcArgs, IpcInput, IpcResult, IpcRouteKey } from './contract';
 import {
   calculateInvoiceTaxSnapshot,
   chooseDefaultBillingAddress,
@@ -596,7 +596,7 @@ const normalizeInvoiceTaxData = (doc: Invoice): Invoice => {
   };
 };
 
-const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<IpcResult<K>> => {
+const invoke = async <K extends IpcRouteKey>(key: K, args: IpcInput<K>): Promise<IpcResult<K>> => {
   switch (key) {
     case 'invoices:list':
       return structuredClone(invoices) as IpcResult<K>;

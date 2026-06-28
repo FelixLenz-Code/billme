@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import {
     Euro, TrendingUp, TrendingDown, Users, Clock, Plus, ArrowRight, FileText,
     ArrowUpRight, CheckCircle, CreditCard, MoreHorizontal, ShieldCheck,
-    PieChart, ArrowLeft, ArrowDownLeft, Search, Link, X, LayoutTemplate, Settings2
+    PieChart, ArrowLeft, ArrowDownLeft, Search, Link, X, LayoutTemplate, Settings2, Trash2
 } from 'lucide-react';
 import { Button } from '@billme/ui';
 import { Account, Transaction, Invoice, AppSettings } from '../types';
@@ -18,6 +18,7 @@ import { useOffersQuery } from '../hooks/useOffers';
 import { MOCK_SETTINGS } from '../data/mockData';
 import {
   useActiveTemplateQuery,
+  useDeleteTemplateMutation,
   useSetActiveTemplateMutation,
   useTemplatesQuery,
   useUpsertTemplateMutation,
@@ -1394,6 +1395,17 @@ export const TemplatesView: React.FC<{ onOpenEditor: (type: 'invoice' | 'offer')
     const { data: activeTemplate } = useActiveTemplateQuery(activeTab);
     const setActiveTemplateMutation = useSetActiveTemplateMutation();
     const upsertTemplateMutation = useUpsertTemplateMutation();
+    const deleteTemplateMutation = useDeleteTemplateMutation();
+
+    const handleDeleteTemplate = async (t: { id: string; name: string }) => {
+        const confirmed = window.confirm(`Vorlage "${t.name}" wirklich löschen?`);
+        if (!confirmed) return;
+        try {
+            await deleteTemplateMutation.mutateAsync(t.id);
+        } catch (e) {
+            alert(`Vorlage löschen fehlgeschlagen: ${String(e)}`);
+        }
+    };
 
     const handleCreateNewTemplate = async () => {
         const baseElements =
@@ -1500,6 +1512,14 @@ export const TemplatesView: React.FC<{ onOpenEditor: (type: 'invoice' | 'offer')
                         {t.id === activeTemplate?.id ? 'Aktiv' : 'Aktivieren'}
                     </button>
                     
+                    <button
+                        onClick={(e) => { e.stopPropagation(); void handleDeleteTemplate(t); }}
+                        title="Vorlage löschen"
+                        className="absolute bottom-4 left-4 bg-white dark:bg-gray-700 text-error border border-gray-200 dark:border-gray-600 w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-error hover:text-white transition-all translate-y-2 group-hover:translate-y-0"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+
                     <button onClick={(e) => { e.stopPropagation(); onOpenEditor(activeTab); }} className="absolute bottom-4 right-4 bg-black text-white w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
                         <ArrowUpRight size={18} />
                     </button>

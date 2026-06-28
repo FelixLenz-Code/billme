@@ -197,6 +197,21 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     return (doc.payments ?? []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   };
 
+  // Leitet den Rechnungsstatus aus den erfassten Zahlungen ab: vollständig bezahlt -> 'paid',
+  // bei nachträglicher Reduzierung wieder 'open'. 'draft'/'cancelled' bleiben unberührt.
+  const deriveStatusFromPayments = (
+    doc: Invoice,
+    payments: NonNullable<Invoice['payments']>,
+    gross: number,
+  ): InvoiceStatus => {
+    if (doc.status === 'draft' || doc.status === 'cancelled') return doc.status;
+    if (gross <= 0) return doc.status;
+    const totalPaid = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    if (totalPaid >= gross - 0.005) return 'paid';
+    if (doc.status === 'paid') return 'open';
+    return doc.status;
+  };
+
   const handleOpenDetail = (id: string) => {
     setSelectedId(id);
     setViewMode('detail');
@@ -242,6 +257,18 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
       }
       setShowShareToast(true);
       setTimeout(() => setShowShareToast(false), 3500);
+    })();
+  };
+
+  const openPathSafely = (target: string) => {
+    void (async () => {
+      try {
+        await ipc.shell.openPath({ path: target });
+      } catch (e) {
+        setToastMessage(`Öffnen fehlgeschlagen: ${String(e)}`);
+        setShowShareToast(true);
+        setTimeout(() => setShowShareToast(false), 5000);
+      }
     })();
   };
 
@@ -794,9 +821,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                   return;
                 }
 
-                const next: Invoice = {
-                  ...selectedDocument,
-                  payments: editingPaymentId
+                const updatedPayments = editingPaymentId
                     ? (selectedDocument.payments ?? []).map((p) =>
                         p.id === editingPaymentId
                           ? { ...p, date, amount, method: paymentForm.method || 'Überweisung' }
@@ -805,7 +830,25 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                     : [
                         ...(selectedDocument.payments ?? []),
                         { id: uuidv4(), date, amount, method: paymentForm.method || 'Überweisung' },
-                      ],
+                      ];
+
+                const gross = Number(selectedDocumentTax?.grossAmount ?? selectedDocument.amount) || 0;
+                const nextStatus = deriveStatusFromPayments(selectedDocument, updatedPayments, gross);
+                const becamePaid = nextStatus === 'paid' && selectedDocument.status !== 'paid';
+
+                const next: Invoice = {
+                  ...selectedDocument,
+                  payments: updatedPayments,
+                  status: nextStatus,
+                  history: becamePaid
+                    ? [
+                        {
+                          date: new Date().toISOString().split('T')[0] ?? '',
+                          action: 'Vollständig bezahlt (Status: Bezahlt)',
+                        },
+                        ...(selectedDocument.history ?? []),
+                      ]
+                    : selectedDocument.history,
                 };
 
                 upsertInvoice.mutate(
@@ -885,9 +928,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                   return;
                 }
 
+                const remainingPayments = (selectedDocument.payments ?? []).filter(
+                  (p) => p.id !== deletingPaymentId,
+                );
+                const gross = Number(selectedDocumentTax?.grossAmount ?? selectedDocument.amount) || 0;
                 const next: Invoice = {
                   ...selectedDocument,
-                  payments: (selectedDocument.payments ?? []).filter((p) => p.id !== deletingPaymentId),
+                  payments: remainingPayments,
+                  status: deriveStatusFromPayments(selectedDocument, remainingPayments, gross),
                 };
 
                 upsertInvoice.mutate(
@@ -927,7 +975,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                       <span className="text-sm font-bold">{toastMessage}</span>
                       {pdfLastPath && toastMessage === 'PDF gespeichert' && (
                         <button
-                          onClick={() => void ipc.shell.openPath({ path: pdfLastPath })}
+                          onClick={() => openPathSafely(pdfLastPath)}
                           className="ml-2 text-xs font-bold underline underline-offset-2 opacity-80 hover:opacity-100 transition-opacity"
                         >
                           Öffnen

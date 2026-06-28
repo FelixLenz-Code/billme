@@ -8,7 +8,7 @@ import { MOCK_SETTINGS } from '../data/mockData';
 import { ElementType } from '../types';
 import { getPreviewElements } from '../utils/documentPreview';
 import { useSettingsQuery } from '../hooks/useSettings';
-import { useActiveTemplateQuery } from '../hooks/useTemplates';
+import { useActiveTemplateQuery, useTemplatesQuery, useSetActiveTemplateMutation } from '../hooks/useTemplates';
 import { useClientsQuery } from '../hooks/useClients';
 import { useArticlesQuery } from '../hooks/useArticles';
 import { useProjectsQuery } from '../hooks/useProjects';
@@ -50,6 +50,8 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   const { data: settingsFromDb } = useSettingsQuery();
   const effectiveSettings = settingsFromDb ?? MOCK_SETTINGS;
   const { data: activeTemplate } = useActiveTemplateQuery(templateType);
+  const { data: templates = [] } = useTemplatesQuery(templateType);
+  const setActiveTemplateMutation = useSetActiveTemplateMutation();
   const effectiveTemplate: InvoiceElement[] =
     (activeTemplate?.elements as InvoiceElement[] | undefined) ?? (templateType === 'offer' ? INITIAL_OFFER_TEMPLATE : INITIAL_INVOICE_TEMPLATE);
   const [selectedClientId, setSelectedClientId] = useState<string>(invoice.clientId ?? '');
@@ -237,6 +239,28 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                         <FileText size={16} className="text-accent fill-black" />
                         Basisdaten
                     </h3>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Vorlage</label>
+                        <select
+                            value={activeTemplate?.id ?? ''}
+                            onChange={(e) => {
+                                const id = e.target.value;
+                                if (!id) return;
+                                void setActiveTemplateMutation.mutateAsync({ kind: templateType, templateId: id });
+                            }}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
+                        >
+                            {templates.length === 0 && <option value="">Standardvorlage</option>}
+                            {templates.map((t) => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
+                        {templates.length === 0 && (
+                            <p className="mt-1 text-xs text-gray-400">
+                                Noch keine {templateType === 'offer' ? 'Angebotsvorlage' : 'Rechnungsvorlage'} angelegt – es wird die Standardvorlage verwendet.
+                            </p>
+                        )}
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1">
@@ -283,9 +307,9 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1">Leistungsdatum</label>
-                            <input 
-                                type="date" 
-                                value={formData.servicePeriod || ''}
+                            <input
+                                type="month"
+                                value={(formData.servicePeriod || '').slice(0, 7)}
                                 onChange={e => setFormData({...formData, servicePeriod: e.target.value})}
                                 className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-medium focus:ring-2 focus:ring-accent outline-none"
                             />

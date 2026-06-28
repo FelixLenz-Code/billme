@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { createBillmeApi } from '../ipc/api';
-import { ipcRoutes, type IpcArgs, type IpcResult, type IpcRouteKey } from '../ipc/contract';
+import { ipcRoutes, type IpcArgs, type IpcInput, type IpcResult, type IpcRouteKey } from '../ipc/contract';
 
-const invoke = async <K extends IpcRouteKey>(key: K, args: IpcArgs<K>): Promise<IpcResult<K>> => {
+const invoke = async <K extends IpcRouteKey>(key: K, args: IpcInput<K>): Promise<IpcResult<K>> => {
   if (key === 'secrets:get') {
     throw new Error('secrets:get is not exposed to renderer');
   }
