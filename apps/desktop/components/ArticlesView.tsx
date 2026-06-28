@@ -259,7 +259,7 @@ export const ArticlesView: React.FC = () => {
               sku: (formData.sku ?? '').trim() || undefined,
               unit: (formData.unit ?? 'Stk').trim(),
               category: safeCategory,
-              taxRate: Number(formData.taxRate) || 19,
+              taxRate: Number.isFinite(Number(formData.taxRate)) ? Number(formData.taxRate) : 19,
               price: Number(formData.price),
               description: formData.description ?? '',
             } as Article);
@@ -271,7 +271,7 @@ export const ArticlesView: React.FC = () => {
                 price: Number(formData.price),
                 unit: (formData.unit ?? 'Stk').trim(),
                 category: safeCategory,
-                taxRate: Number(formData.taxRate) || 19,
+                taxRate: Number.isFinite(Number(formData.taxRate)) ? Number(formData.taxRate) : 19,
                 sku: (formData.sku ?? '').trim() || undefined
             };
             await upsertArticle.mutateAsync(newArticle);

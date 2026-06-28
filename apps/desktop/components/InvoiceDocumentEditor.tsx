@@ -61,9 +61,31 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
   );
   const projectTouchedRef = React.useRef(false);
 
+  const taxSnapshot = useMemo(
+    () =>
+      calculateInvoiceTaxSnapshot(
+        {
+          items: formData.items,
+          taxMode: formData.taxMode,
+          taxMeta: formData.taxMeta,
+        },
+        effectiveSettings,
+      ),
+    [formData.items, formData.taxMeta, formData.taxMode, effectiveSettings],
+  );
+  const totals = {
+    net: taxSnapshot.netAmount,
+    vat: taxSnapshot.vatAmount,
+    gross: taxSnapshot.grossAmount,
+  };
+
   const previewElements = useMemo(() => {
-      return getPreviewElements(formData, effectiveTemplate, effectiveSettings);
-  }, [formData, effectiveSettings, effectiveTemplate]);
+      // Always feed the freshly computed tax snapshot into the preview so the
+      // totals/VAT block reflects the current form state immediately. Otherwise
+      // a stored snapshot (present when editing a saved document) would freeze
+      // the preview totals until the document is saved and reopened.
+      return getPreviewElements({ ...formData, taxSnapshot }, effectiveTemplate, effectiveSettings);
+  }, [formData, taxSnapshot, effectiveSettings, effectiveTemplate]);
 
   const categoryOptions = useMemo(() => {
       const fromSettings = (effectiveSettings.catalog?.categories ?? []).map((c) => c.name).filter(Boolean);
@@ -179,24 +201,6 @@ export const InvoiceDocumentEditor: React.FC<InvoiceDocumentEditorProps> = ({
           ...formData,
           items: formData.items.filter((_, i) => i !== index)
       });
-  };
-
-  const taxSnapshot = useMemo(
-    () =>
-      calculateInvoiceTaxSnapshot(
-        {
-          items: formData.items,
-          taxMode: formData.taxMode,
-          taxMeta: formData.taxMeta,
-        },
-        effectiveSettings,
-      ),
-    [formData.items, formData.taxMeta, formData.taxMode, effectiveSettings],
-  );
-  const totals = {
-    net: taxSnapshot.netAmount,
-    vat: taxSnapshot.vatAmount,
-    gross: taxSnapshot.grossAmount,
   };
 
   return (

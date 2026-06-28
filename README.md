@@ -5,6 +5,19 @@
 A local-first invoicing desktop app (Electron + React + SQLite) and a public offer portal service.
 Built with love in Germany.
 
+> ## ⚠️ Fork notice
+>
+> **This is a fork of [bl4ckh4nd/billme](https://github.com/bl4ckh4nd/billme), maintained by [FelixLenz-Code](https://github.com/FelixLenz-Code) for bugfixing.**
+> It is not the official upstream repository. Changes made in this fork are listed in [Fork changes](#fork-changes) below.
+
+## Fork changes
+
+This fork diverges from upstream with the following fixes (desktop app / Linux AppImage):
+
+- **VAT slider for products now applies `0 %` correctly.** In the product edit form (`apps/desktop/components/ArticlesView.tsx`) the tax rate was saved with `Number(formData.taxRate) || 19`, so selecting **0 %** (relevant for *Kleinunternehmer* per §19 UStG) silently fell back to **19 %** because `0` is falsy. Now `0 %`, `7 %` and `19 %` are all saved as chosen.
+- **Example/seed data no longer reappears after a restart.** The mock/example data seeding in `apps/desktop/electron/main.ts` could run on startup and refill emptied tables (delete → restart → data back). The dev-only `isDev` guard is now additionally gated behind `!app.isPackaged`, so a packaged build (e.g. the AppImage) never seeds example data.
+- **Live preview totals/VAT update immediately.** In the document editor (`apps/desktop/components/InvoiceDocumentEditor.tsx`) the preview preferred a stored `taxSnapshot`, which froze the totals/VAT block until the document was saved and reopened. The preview now always uses the freshly computed tax snapshot, matching the form summary and what gets saved.
+
 Check out a web-hosted demo of the app here: [Demo](https://demo.getbillme.com/)).
 
 PLEASE NOTE: This is still a Beta-Version. Expect some minor issues and please report them so they can be fixed!

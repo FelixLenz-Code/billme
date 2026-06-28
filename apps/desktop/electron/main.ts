@@ -37,7 +37,12 @@ import { logger } from '../utils/logger';
 import { PRODUCT_PROFILE } from '../productProfile';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
-const isDev = Boolean(process.env.VITE_DEV_SERVER_URL || process.env.ELECTRON_RENDERER_URL);
+// Never treat a packaged build (e.g. the AppImage) as dev, even if stray
+// VITE_DEV_SERVER_URL / ELECTRON_RENDERER_URL env vars leak in. This guards the
+// mock/example data seeding below so it can only ever run in real development.
+const isDev =
+  !app.isPackaged &&
+  Boolean(process.env.VITE_DEV_SERVER_URL || process.env.ELECTRON_RENDERER_URL);
 
 app.setName(PRODUCT_PROFILE.appName);
 
