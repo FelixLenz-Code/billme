@@ -545,9 +545,9 @@ export const DashboardHome: React.FC<ViewProps> = ({ onNavigate }) => {
                           type="button"
                           key={row.category}
                           onClick={() => onNavigate(`articles?query=${encodeURIComponent(row.category)}`)}
-                          className="flex items-center justify-between p-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-colors cursor-pointer"
+                          className="w-full flex items-center justify-between gap-3 p-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
                             <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
                               {initials || '—'}
                             </div>
@@ -558,7 +558,7 @@ export const DashboardHome: React.FC<ViewProps> = ({ onNavigate }) => {
                               </span>
                             </div>
                           </div>
-                          <span className="font-mono font-bold text-lg">{formatCurrency(row.amount)}</span>
+                          <span className="font-mono font-bold text-base shrink-0 whitespace-nowrap">{formatCurrency(row.amount)}</span>
                         </button>
                       );
                     })

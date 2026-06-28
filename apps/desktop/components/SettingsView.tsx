@@ -28,6 +28,10 @@ export const SettingsView: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(loadedSettings ?? MOCK_SETTINGS);
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [backupPath, setBackupPath] = useState('');
+  const [auditResult, setAuditResult] = useState<
+    { ok: boolean; count: number; errors: { sequence: number; message: string }[] } | null
+  >(null);
+  const [auditVerifying, setAuditVerifying] = useState(false);
   const [portalApiKey, setPortalApiKey] = useState('');
   const [portalApiKeyConfigured, setPortalApiKeyConfigured] = useState(false);
   const [portalApiKeyTouched, setPortalApiKeyTouched] = useState(false);
@@ -1548,31 +1552,30 @@ export const SettingsView: React.FC = () => {
               <p className="text-gray-500 text-sm">Audit-Log, Backup und Wiederherstellung.</p>
             </div>
 
-            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h4 className="text-lg font-bold text-gray-900">Audit</h4>
                 <p className="text-sm text-gray-500">Audit-Log prüfen und als CSV exportieren.</p>
               </div>
               <div className="flex gap-3">
                 <button
+                  disabled={auditVerifying}
                   onClick={async () => {
+                    setAuditVerifying(true);
+                    setAuditResult(null);
                     try {
                       const result = await ipc.audit.verify();
-                      if (result.ok) {
-                        alert(`Audit-Log gültig.\n${result.count} Einträge geprüft, keine Fehler gefunden.`);
-                      } else {
-                        alert(
-                          `Audit-Log INKONSISTENT.\n${result.count} Einträge geprüft.\n` +
-                            `Fehler:\n${(result.errors ?? []).map((err) => `#${err.sequence}: ${err.message}`).join('\n') || 'Unbekannt'}`,
-                        );
-                      }
+                      setAuditResult({ ok: result.ok, count: result.count, errors: result.errors ?? [] });
                     } catch (e) {
-                      alert(`Audit-Prüfung fehlgeschlagen: ${String(e)}`);
+                      setAuditResult({ ok: false, count: 0, errors: [{ sequence: 0, message: String(e) }] });
+                    } finally {
+                      setAuditVerifying(false);
                     }
                   }}
-                  className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors"
+                  className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Verify
+                  {auditVerifying ? 'Prüfe...' : 'Verify'}
                 </button>
                 <button
                   onClick={async () => {
@@ -1592,6 +1595,34 @@ export const SettingsView: React.FC = () => {
                   Export CSV
                 </button>
               </div>
+              </div>
+
+              {auditResult && (
+                <div
+                  className={`rounded-2xl p-4 text-sm ${
+                    auditResult.ok ? 'bg-success-bg text-success' : 'bg-error-bg text-error'
+                  }`}
+                >
+                  {auditResult.ok ? (
+                    <p className="font-bold">
+                      Audit-Log gültig – {auditResult.count} Einträge geprüft, keine Fehler gefunden.
+                    </p>
+                  ) : (
+                    <div>
+                      <p className="font-bold mb-1">
+                        Audit-Log inkonsistent – {auditResult.count} Einträge geprüft.
+                      </p>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {auditResult.errors.map((err, idx) => (
+                          <li key={idx}>
+                            #{err.sequence}: {err.message}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4">

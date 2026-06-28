@@ -228,9 +228,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
       ) : (
         <>
           {/* Top Navigation Bar */}
-          <header className="h-[88px] bg-white border-b border-gray-100 px-8 flex items-center justify-between shrink-0 z-40 no-print">
+          <header className="h-[88px] bg-white border-b border-gray-100 px-8 flex items-center gap-4 shrink-0 z-40 no-print">
             {/* Left: Logo */}
-            <div className="flex items-center gap-3 w-64">
+            <div className="flex items-center gap-3 shrink-0">
               <img
                 src={billmeFullLogo}
                 alt="Billme"
@@ -240,12 +240,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
             </div>
 
             {/* Center: Navigation Pills */}
-            <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 p-1.5 rounded-full border border-gray-200">
+            <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 p-1.5 rounded-full border border-gray-200 mx-auto min-w-0 max-w-full overflow-x-auto scrollbar-thin">
               {visibleMenuItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
-                  className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                  className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-300 shrink-0 whitespace-nowrap ${
                     activePage === item.id
                       ? 'bg-black text-white shadow-md'
                       : 'text-gray-500 hover:bg-white hover:text-black hover:shadow-sm'
@@ -257,7 +257,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, acti
             </nav>
 
             {/* Right: Actions */}
-            <div className="flex items-center gap-2 w-64 justify-end">
+            <div className="flex items-center gap-2 shrink-0 justify-end ml-auto md:ml-0">
                 <div ref={searchContainerRef} className="relative hidden lg:block">
                     <div className="flex items-center h-11 px-3 bg-gradient-to-b from-white to-gray-50 border border-gray-200 rounded-2xl shadow-sm transition-all focus-within:shadow-md focus-within:border-gray-300 gap-2">
                         <Search size={16} className="text-gray-400 shrink-0" />

@@ -13,6 +13,7 @@ export const EMAIL_VARIABLES: EmailVariable[] = [
   { key: 'document.dueDate', label: 'Fälligkeit' },
   { key: 'document.total', label: 'Gesamtbetrag (brutto)' },
   { key: 'client.name', label: 'Kundenname' },
+  { key: 'client.contact', label: 'Ansprechpartner des Kunden' },
   { key: 'client.number', label: 'Kundennummer' },
   { key: 'company.name', label: 'Eigener Firmenname' },
   { key: 'company.owner', label: 'Ansprechpartner / Inhaber' },
@@ -41,6 +42,7 @@ export const buildEmailContext = (
   doc: Invoice,
   documentType: 'invoice' | 'offer',
   settings: AppSettings,
+  clientContactPerson?: string,
 ): Record<string, string> => {
   const gross = Number(doc.taxSnapshot?.grossAmount ?? doc.amount) || 0;
   return {
@@ -50,6 +52,7 @@ export const buildEmailContext = (
     'document.dueDate': formatDate(doc.dueDate),
     'document.total': formatCurrency(gross),
     'client.name': doc.client ?? '',
+    'client.contact': clientContactPerson ?? '',
     'client.number': doc.clientNumber ?? '',
     'company.name': settings.company?.name ?? '',
     'company.owner': settings.company?.owner ?? '',

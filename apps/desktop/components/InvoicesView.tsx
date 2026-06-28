@@ -14,6 +14,7 @@ import { MOCK_SETTINGS } from '../data/mockData';
 import { useDeleteInvoiceMutation, useInvoicesQuery, useUpsertInvoiceMutation } from '../hooks/useInvoices';
 import { useDeleteOfferMutation, useOffersQuery, useUpsertOfferMutation } from '../hooks/useOffers';
 import { useSettingsQuery } from '../hooks/useSettings';
+import { useClientsQuery } from '../hooks/useClients';
 import { ipc } from '../ipc/client';
 import {
   DEFAULT_EMAIL_BODY,
@@ -149,6 +150,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const deleteOffer = useDeleteOfferMutation();
   const { data: settingsFromDb } = useSettingsQuery();
   const settings = settingsFromDb ?? MOCK_SETTINGS;
+  const { data: clients = [] } = useClientsQuery();
   const currentData = documentType === 'invoice' ? invoices : offers;
   const isLoading = documentType === 'invoice' ? isLoadingInvoices : isLoadingOffers;
   
@@ -392,7 +394,10 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   // --- Email Logic ---
   const handleOpenEmail = () => {
       if(!selectedDocument) return;
-      const ctx = buildEmailContext(selectedDocument, documentType, settings);
+      const matchedClient = clients.find(
+        (c) => c.id === selectedDocument.clientId || c.company === selectedDocument.client,
+      );
+      const ctx = buildEmailContext(selectedDocument, documentType, settings, matchedClient?.contactPerson);
       const subjectTemplate = settings.email?.defaultSubject?.trim() || DEFAULT_EMAIL_SUBJECT;
       const bodyTemplate = settings.email?.defaultBody?.trim() || DEFAULT_EMAIL_BODY;
       setEmailData({
