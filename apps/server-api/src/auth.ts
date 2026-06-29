@@ -28,11 +28,25 @@ export type AuthSessionInfo = {
 const encodeBase64Url = (value: string): string => Buffer.from(value, 'utf8').toString('base64url');
 const decodeBase64Url = (value: string): string => Buffer.from(value, 'base64url').toString('utf8');
 
+const INSECURE_SESSION_SECRETS = new Set([
+  'billme-dev-session-secret',
+  'replace-with-a-long-random-secret',
+  'change-me',
+]);
+const MIN_SESSION_SECRET_LENGTH = 16;
+
 export class SessionTokenService {
   private readonly secret: string;
 
-  constructor(secret = process.env.SESSION_SECRET?.trim() || 'billme-dev-session-secret') {
-    this.secret = secret;
+  constructor(secret = process.env.SESSION_SECRET) {
+    const normalized = secret?.trim() ?? '';
+    if (normalized.length < MIN_SESSION_SECRET_LENGTH || INSECURE_SESSION_SECRETS.has(normalized)) {
+      throw new Error(
+        `SESSION_SECRET must be set to a strong, random value of at least ${MIN_SESSION_SECRET_LENGTH} characters. ` +
+          'Refusing to start with a missing, default, or weak secret.',
+      );
+    }
+    this.secret = normalized;
   }
 
   sign(session: AuthSession, ttlSeconds = 60 * 60 * 12): string {
@@ -63,7 +77,14 @@ export class SessionTokenService {
       return null;
     }
 
-    const parsed = tokenPayloadSchema.safeParse(JSON.parse(decodeBase64Url(payload)));
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(decodeBase64Url(payload));
+    } catch {
+      return null;
+    }
+
+    const parsed = tokenPayloadSchema.safeParse(decoded);
     if (!parsed.success) {
       return null;
     }

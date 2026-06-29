@@ -6,9 +6,12 @@ services:
     environment:
       POSTGRES_DB: ${BILLME_POSTGRES_DB:-billme}
       POSTGRES_USER: ${BILLME_POSTGRES_USER:-billme}
-      POSTGRES_PASSWORD: ${BILLME_POSTGRES_PASSWORD:-billme}
-    ports:
-      - "${BILLME_POSTGRES_PORT:-5432}:5432"
+      POSTGRES_PASSWORD: ${BILLME_POSTGRES_PASSWORD:?BILLME_POSTGRES_PASSWORD must be set to a strong value}
+    # Postgres is reachable by other services on the internal compose network as
+    # `postgres:5432`. It is intentionally NOT published to the host. If you need
+    # host access for debugging, uncomment the block below and bind to localhost.
+    # ports:
+    #   - "127.0.0.1:${BILLME_POSTGRES_PORT:-5432}:5432"
     volumes:
       - "${BILLME_POSTGRES_DATA_DIR:-billme-postgres-data}:/var/lib/postgresql/data"
     healthcheck:
@@ -27,8 +30,8 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3100
-      SESSION_SECRET: ${BILLME_SESSION_SECRET:-billme-dev-session-secret}
-      DATABASE_URL: postgresql://${BILLME_POSTGRES_USER:-billme}:${BILLME_POSTGRES_PASSWORD:-billme}@postgres:5432/${BILLME_POSTGRES_DB:-billme}
+      SESSION_SECRET: ${BILLME_SESSION_SECRET:?BILLME_SESSION_SECRET must be set to a strong random value (>=16 chars)}
+      DATABASE_URL: postgresql://${BILLME_POSTGRES_USER:-billme}:${BILLME_POSTGRES_PASSWORD:?BILLME_POSTGRES_PASSWORD must be set to a strong value}@postgres:5432/${BILLME_POSTGRES_DB:-billme}
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +46,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     environment:
-      DATABASE_URL: postgresql://${BILLME_POSTGRES_USER:-billme}:${BILLME_POSTGRES_PASSWORD:-billme}@postgres:5432/${BILLME_POSTGRES_DB:-billme}
+      DATABASE_URL: postgresql://${BILLME_POSTGRES_USER:-billme}:${BILLME_POSTGRES_PASSWORD:?BILLME_POSTGRES_PASSWORD must be set to a strong value}@postgres:5432/${BILLME_POSTGRES_DB:-billme}
       WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
       WORKER_RECURRING_INTERVAL_MS: ${WORKER_RECURRING_INTERVAL_MS:-900000}
       WORKER_DUNNING_INTERVAL_MS: ${WORKER_DUNNING_INTERVAL_MS:-900000}

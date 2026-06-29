@@ -5,6 +5,15 @@ import type { OfferStore, PdfStore, PortalDocumentListItem } from './storage/typ
 import { BILLME_FULL_LOGO_DATA_URI } from './branding';
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
+
+const constantTimeEquals = (a: string, b: string): boolean => {
+  const bufferA = Buffer.from(a, 'utf8');
+  const bufferB = Buffer.from(b, 'utf8');
+  if (bufferA.length !== bufferB.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(bufferA, bufferB);
+};
 const nowIso = () => new Date().toISOString();
 
 const escapeHtml = (s: string) =>
@@ -204,7 +213,7 @@ const checkPublishAuth = (
   if (!publishApiKey) return { ok: true };
 
   const header = c.req.header('x-api-key');
-  if (header && header === publishApiKey) return { ok: true };
+  if (header && constantTimeEquals(header, publishApiKey)) return { ok: true };
 
   return { ok: false, status: 401, error: 'unauthorized' };
 };

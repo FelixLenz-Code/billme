@@ -1,4 +1,4 @@
-import { randomUUID, scryptSync } from 'node:crypto';
+import { randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
 import {
   normalizeEmailAddress,
@@ -31,6 +31,15 @@ export interface ServerAuthStore {
 
 const derivePasswordHash = (password: string, salt: string): string => {
   return scryptSync(password, salt, 64).toString('hex');
+};
+
+const constantTimeEquals = (a: string, b: string): boolean => {
+  const bufferA = Buffer.from(a, 'utf8');
+  const bufferB = Buffer.from(b, 'utf8');
+  if (bufferA.length !== bufferB.length) {
+    return false;
+  }
+  return timingSafeEqual(bufferA, bufferB);
 };
 
 const createSalt = (): string => randomUUID().replaceAll('-', '');
@@ -190,7 +199,7 @@ export const createPostgresAuthStore = (pool: Pool): ServerAuthStore => ({
     }
 
     const candidateHash = derivePasswordHash(input.password, row.password_salt);
-    if (candidateHash !== row.password_hash) {
+    if (!constantTimeEquals(candidateHash, row.password_hash)) {
       throw new Error('Invalid email or password');
     }
 

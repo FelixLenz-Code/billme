@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, session } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type {
@@ -113,6 +113,32 @@ const createWindow = async () => {
     event.preventDefault();
     logger.warn('Security', 'Blocked unexpected navigation', { url });
   });
+
+  // Enforce a Content-Security-Policy on the packaged (file://) renderer. It is
+  // intentionally skipped in dev, where the Vite dev server / HMR needs eval and
+  // a websocket connection that a strict policy would block.
+  if (!devServerUrl) {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "base-uri 'none'",
+      "frame-ancestors 'none'",
+      "form-action 'none'",
+    ].join('; ');
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [csp],
+        },
+      });
+    });
+  }
 
   if (devServerUrl) {
     console.log('Loading renderer from', devServerUrl);

@@ -272,6 +272,70 @@ const requirePool = (app: FastifyInstance): Pool => {
   return app.serverPool;
 };
 
+// Translate auth-store failures (which throw plain Errors) into proper HTTP
+// status codes instead of leaking them as generic 500s.
+const mapAuthError = (error: unknown, kind: 'login' | 'bootstrap'): never => {
+  if (error instanceof ApiError) {
+    throw error;
+  }
+  if (kind === 'login') {
+    // Do not distinguish "unknown user" from "wrong password".
+    throw new ApiError(401, 'Invalid email or password');
+  }
+  const message = error instanceof Error ? error.message : 'Bootstrap failed';
+  if (/already completed|already exists/i.test(message)) {
+    throw new ApiError(409, message);
+  }
+  throw new ApiError(400, message);
+};
+
+const authenticate = async <T>(work: () => Promise<T> | T, kind: 'login' | 'bootstrap'): Promise<T> => {
+  try {
+    return await work();
+  } catch (error) {
+    return mapAuthError(error, kind);
+  }
+};
+
+// Lightweight in-process rate limiter for unauthenticated auth endpoints to
+// blunt brute-force / credential-stuffing attacks. Keyed by client IP + route.
+type RateBucket = { count: number; resetAt: number };
+const AUTH_RATE_LIMIT = { windowMs: 60_000, max: 10 };
+const MAX_RATE_BUCKETS = 10_000;
+
+const createAuthRateLimiter = () => {
+  const buckets = new Map<string, RateBucket>();
+  return (key: string): { ok: true } | { ok: false; retryAfterSec: number } => {
+    const now = Date.now();
+    for (const [k, bucket] of buckets) {
+      if (bucket.resetAt <= now) {
+        buckets.delete(k);
+      }
+    }
+    if (buckets.size > MAX_RATE_BUCKETS) {
+      buckets.clear();
+    }
+    const existing = buckets.get(key);
+    if (!existing || existing.resetAt <= now) {
+      buckets.set(key, { count: 1, resetAt: now + AUTH_RATE_LIMIT.windowMs });
+      return { ok: true };
+    }
+    if (existing.count >= AUTH_RATE_LIMIT.max) {
+      return { ok: false, retryAfterSec: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)) };
+    }
+    existing.count += 1;
+    return { ok: true };
+  };
+};
+
+const clientIpFor = (request: { ip: string; headers: Record<string, unknown> }): string => {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0]?.trim() || request.ip;
+  }
+  return request.ip;
+};
+
 const createNumberingPortsForDb = (db: PostgresQueryable, scope: TenantScope) => ({
   tx: {
     async inTransaction<TResult>(work: () => Promise<TResult> | TResult): Promise<TResult> {
@@ -401,7 +465,7 @@ const registerAuthRoutes = (app: FastifyInstance, product: 'lite' | 'pro', prefi
       user: authUserSchema,
     }),
     async handler({ body }) {
-      const principal = await app.authStore.bootstrap(product, body);
+      const principal = await authenticate(() => app.authStore.bootstrap(product, body), 'bootstrap');
       return {
         token: app.tokenService.sign({
           user: principal.user,
@@ -422,7 +486,7 @@ const registerAuthRoutes = (app: FastifyInstance, product: 'lite' | 'pro', prefi
       user: authUserSchema,
     }),
     async handler({ body }) {
-      const principal = await app.authStore.login(product, body);
+      const principal = await authenticate(() => app.authStore.login(product, body), 'login');
       return {
         token: app.tokenService.sign({
           user: principal.user,
@@ -1293,10 +1357,43 @@ export const buildServerApi = async (): Promise<FastifyInstance> => {
 
   registerErrorHandler(app);
 
+  // Restrict CORS to an explicit allowlist when configured; otherwise reflect
+  // the request origin (auth uses bearer tokens, not cookies). Set
+  // BILLME_CORS_ORIGINS to a comma-separated list to lock this down.
+  const corsAllowlist = (process.env.BILLME_CORS_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
   await app.register(cors, {
-    origin: true,
+    origin: corsAllowlist.length > 0 ? corsAllowlist : true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'content-type'],
+  });
+
+  // Baseline security headers on every response.
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    reply.removeHeader('X-Powered-By');
+  });
+
+  // Rate-limit unauthenticated auth endpoints (login / bootstrap).
+  const authRateLimiter = createAuthRateLimiter();
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.method !== 'POST') {
+      return;
+    }
+    const path = request.url.split('?')[0] ?? '';
+    if (!/\/auth\/(login|bootstrap)$/.test(path)) {
+      return;
+    }
+    const result = authRateLimiter(`${path}:${clientIpFor(request)}`);
+    if (!result.ok) {
+      reply.header('Retry-After', String(result.retryAfterSec));
+      await reply.code(429).send({ message: 'Too many attempts. Please try again later.' });
+    }
   });
 
   const databaseUrl = readDatabaseUrl(process.env);
@@ -1378,7 +1475,7 @@ export const buildServerApi = async (): Promise<FastifyInstance> => {
       user: authUserSchema,
     }),
     async handler({ query, body }) {
-      const principal = await app.authStore.bootstrap(query.product, body);
+      const principal = await authenticate(() => app.authStore.bootstrap(query.product, body), 'bootstrap');
       return {
         token: app.tokenService.sign({
           user: principal.user,
@@ -1400,7 +1497,7 @@ export const buildServerApi = async (): Promise<FastifyInstance> => {
       user: authUserSchema,
     }),
     async handler({ query, body }) {
-      const principal = await app.authStore.login(query.product, body);
+      const principal = await authenticate(() => app.authStore.login(query.product, body), 'login');
       return {
         token: app.tokenService.sign({
           user: principal.user,

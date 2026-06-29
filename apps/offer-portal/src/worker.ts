@@ -18,10 +18,11 @@ export default {
       config: {
         publishApiKey: env.PUBLISH_API_KEY,
         publicBaseUrl: env.PUBLIC_BASE_URL,
+        // Fail closed by default: require an API key unless explicitly disabled.
         requirePublishApiKey:
           typeof env.REQUIRE_PUBLISH_API_KEY === 'string'
-            ? ['1', 'true', 'yes', 'on'].includes(env.REQUIRE_PUBLISH_API_KEY.toLowerCase())
-            : false,
+            ? !['0', 'false', 'no', 'off'].includes(env.REQUIRE_PUBLISH_API_KEY.toLowerCase())
+            : true,
       },
     });
     return app.fetch(request, env, ctx);

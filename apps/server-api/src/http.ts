@@ -75,7 +75,7 @@ export const registerErrorHandler = (app: FastifyInstance) => {
 
     request.log.error(error);
     return reply.code(500).send({
-      message: error instanceof Error ? error.message : 'Internal server error',
+      message: 'Internal server error',
     });
   });
 };

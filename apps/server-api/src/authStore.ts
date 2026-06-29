@@ -1,4 +1,4 @@
-import { randomUUID, scryptSync } from 'crypto';
+import { randomUUID, scryptSync, timingSafeEqual } from 'crypto';
 import {
   normalizeEmailAddress,
   type BootstrapStatus,
@@ -32,6 +32,15 @@ export interface AuthStore {
 
 const derivePasswordHash = (password: string, salt: string): string => {
   return scryptSync(password, salt, 64).toString('hex');
+};
+
+const constantTimeEquals = (a: string, b: string): boolean => {
+  const bufferA = Buffer.from(a, 'utf8');
+  const bufferB = Buffer.from(b, 'utf8');
+  if (bufferA.length !== bufferB.length) {
+    return false;
+  }
+  return timingSafeEqual(bufferA, bufferB);
 };
 
 const createSalt = (): string => randomUUID().replaceAll('-', '');
@@ -95,7 +104,7 @@ export class InMemoryAuthStore implements AuthStore {
     }
 
     const candidateHash = derivePasswordHash(input.password, user.salt);
-    if (candidateHash !== user.passwordHash) {
+    if (!constantTimeEquals(candidateHash, user.passwordHash)) {
       throw new Error('Invalid email or password');
     }
 

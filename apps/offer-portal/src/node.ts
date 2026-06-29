@@ -46,7 +46,8 @@ const app = createApp({
   config: {
     publishApiKey: env.PUBLISH_API_KEY,
     publicBaseUrl: env.PUBLIC_BASE_URL,
-    requirePublishApiKey: env.REQUIRE_PUBLISH_API_KEY ?? process.env.NODE_ENV === 'production',
+    // Fail closed by default: require an API key unless explicitly disabled.
+    requirePublishApiKey: env.REQUIRE_PUBLISH_API_KEY ?? true,
   },
 });
 

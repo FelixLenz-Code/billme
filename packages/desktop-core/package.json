@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "nodemailer": "^6.9.15",
+    "nodemailer": "^9.0.1",
     "zustand": "^5.0.10"
   },
   "peerDependencies": {
@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
-    "@types/nodemailer": "^6.4.16",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3"
   },

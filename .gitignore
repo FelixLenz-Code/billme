@@ -10,6 +10,13 @@ lerna-debug.log*
 node_modules
 dist
 out
+
+# Environment files with secrets (never commit these; *.example is allowed)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
 apps/desktop/dist
 apps/desktop/out
 apps/offer-portal/dist
