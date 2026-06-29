@@ -151,6 +151,18 @@ Server-Mode-Playwright benötigt Docker- oder Podman-Zugriff plus eine lokale Ch
 - `docs/server-mode-docker.md`
 - `docs/releasing.md`
 
+## Hinweis zur KI-Unterstützung
+
+Diese Software wurde vollständig mithilfe von Claude (einem KI-Assistenten von Anthropic) entwickelt. Der Autor hat die Anforderungen definiert, Entscheidungen getroffen und das Ergebnis geprüft — der Code selbst wurde durch den Dialog mit der KI generiert.
+
+## Haftungsausschluss
+
+Die Software wird so bereitgestellt, wie sie ist (as-is), ohne jegliche Garantie auf Korrektheit, Vollständigkeit oder Eignung für einen bestimmten Zweck. Der Autor übernimmt keinerlei Haftung für Schäden, Datenverluste oder sonstige Probleme, die durch die Verwendung dieser Software entstehen. Die Nutzung erfolgt auf eigene Verantwortung.
+
+Dies gilt insbesondere für die steuerliche und buchhalterische Korrektheit: Billme stellt keine Steuer-, Rechts- oder Buchführungsberatung dar. Der Autor übernimmt keine Verantwortung für die Richtigkeit von Rechnungen, Steuersätzen, Beträgen, E-Rechnungen (z. B. ZUGFeRD), Aufbewahrungspflichten oder die Einhaltung gesetzlicher Vorgaben (etwa GoBD, UStG). Für die korrekte steuerliche Behandlung sowie die Erfüllung aller rechtlichen und steuerlichen Pflichten ist allein der Nutzer verantwortlich; im Zweifel ist eine Steuerberaterin oder ein Steuerberater hinzuzuziehen.
+
+Bei Einsatz in einem Betrieb oder zu geschäftlichen Zwecken trägt allein der Nutzer die Verantwortung für alle daraus entstehenden Folgen — einschließlich finanzieller, steuerlicher oder rechtlicher Konsequenzen. Der Autor haftet nicht für betriebliche Ausfälle, fehlerhafte Rechnungsstellung, Nachforderungen, Bußgelder oder sonstige Schäden, die im geschäftlichen Einsatz entstehen.
+
 ## Lizenz
 
 FSL1.1, siehe `LICENSE`.
