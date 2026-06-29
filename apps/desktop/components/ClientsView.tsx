@@ -71,6 +71,7 @@ export const ClientsView: React.FC = () => {
                 id: uuidv4(),
                 customerNumber: '',
                 company: '',
+                salutation: '',
                 contactPerson: '',
                 contactFirstName: '',
                 contactLastName: '',
@@ -231,6 +232,7 @@ export const ClientsView: React.FC = () => {
             ...draft,
             company,
             email: legacyEmail,
+            salutation: (draft.salutation ?? '').trim() || undefined,
             contactFirstName,
             contactLastName,
             contactPerson: combinedContact || draft.contactPerson.trim(),
@@ -620,6 +622,20 @@ export const ClientsView: React.FC = () => {
                                          onChange={(e) => setDraft({ ...draft, company: e.target.value })}
                                          className="w-full bg-surface-muted border border-border rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent transition-shadow"
                                      />
+                                 </div>
+                                 <div>
+                                     <label className="block text-xs font-bold text-gray-500 mb-1">Anrede</label>
+                                     <input
+                                         list="client-salutation-options"
+                                         value={draft.salutation ?? ''}
+                                         onChange={(e) => setDraft({ ...draft, salutation: e.target.value })}
+                                         placeholder="z. B. Herr / Frau"
+                                         className="w-full bg-surface-muted border border-border rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent transition-shadow"
+                                     />
+                                     <datalist id="client-salutation-options">
+                                         <option value="Herr" />
+                                         <option value="Frau" />
+                                     </datalist>
                                  </div>
                                  <div className="grid grid-cols-2 gap-3">
                                      <div>

@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS clients (
   id TEXT PRIMARY KEY,
   customer_number TEXT,
   company TEXT NOT NULL,
+  salutation TEXT,
   contact_person TEXT NOT NULL,
   contact_first_name TEXT,
   contact_last_name TEXT,

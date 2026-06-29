@@ -127,6 +127,7 @@ export const clientSchema = z.object({
   id: z.string(),
   customerNumber: z.string().optional(),
   company: z.string(),
+  salutation: z.string().optional(),
   contactPerson: z.string(),
   contactFirstName: z.string().optional(),
   contactLastName: z.string().optional(),

@@ -52,4 +52,17 @@ describe('buildEmailContext contact variables', () => {
       'Sehr geehrter Herr Müller,',
     );
   });
+
+  it('exposes the per-client salutation and resolves it in a template', () => {
+    const ctx = buildEmailContext(doc, 'invoice', settings, { salutation: 'Frau', lastName: 'Müller' });
+    expect(ctx['client.salutation']).toBe('Frau');
+    expect(
+      resolveEmailPlaceholders('Sehr geehrte {{client.salutation}} {{client.contactLastName}},', ctx),
+    ).toBe('Sehr geehrte Frau Müller,');
+  });
+
+  it('defaults the salutation to an empty string when not set', () => {
+    const ctx = buildEmailContext(doc, 'invoice', settings, { lastName: 'Müller' });
+    expect(ctx['client.salutation']).toBe('');
+  });
 });

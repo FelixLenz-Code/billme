@@ -16,6 +16,7 @@ type ClientRow = {
   id: string;
   customer_number: string | null;
   company: string;
+  salutation: string | null;
   contact_person: string;
   contact_first_name: string | null;
   contact_last_name: string | null;
@@ -167,6 +168,7 @@ export const listClients = (db: Database.Database): Client[] => {
       id: c.id,
       customerNumber: c.customer_number ?? undefined,
       company: c.company,
+      salutation: c.salutation ?? undefined,
       contactPerson: c.contact_person,
       contactFirstName: c.contact_first_name ?? undefined,
       contactLastName: c.contact_last_name ?? undefined,
@@ -233,15 +235,16 @@ export const upsertClient = (db: Database.Database, client: Client): Client => {
       db.prepare(
         `
           INSERT INTO clients (
-            id, customer_number, company, contact_person, contact_first_name, contact_last_name, email, phone, address, status, avatar, tags_json, notes
+            id, customer_number, company, salutation, contact_person, contact_first_name, contact_last_name, email, phone, address, status, avatar, tags_json, notes
           ) VALUES (
-            @id, @customerNumber, @company, @contactPerson, @contactFirstName, @contactLastName, @email, @phone, @address, @status, @avatar, @tagsJson, @notes
+            @id, @customerNumber, @company, @salutation, @contactPerson, @contactFirstName, @contactLastName, @email, @phone, @address, @status, @avatar, @tagsJson, @notes
           )
         `,
       ).run({
         id: client.id,
         customerNumber,
         company: client.company,
+        salutation: client.salutation ?? null,
         contactPerson: client.contactPerson,
         contactFirstName: client.contactFirstName ?? null,
         contactLastName: client.contactLastName ?? null,
@@ -259,6 +262,7 @@ export const upsertClient = (db: Database.Database, client: Client): Client => {
           UPDATE clients SET
             customer_number=@customerNumber,
             company=@company,
+            salutation=@salutation,
             contact_person=@contactPerson,
             contact_first_name=@contactFirstName,
             contact_last_name=@contactLastName,
@@ -275,6 +279,7 @@ export const upsertClient = (db: Database.Database, client: Client): Client => {
         id: client.id,
         customerNumber,
         company: client.company,
+        salutation: client.salutation ?? null,
         contactPerson: client.contactPerson,
         contactFirstName: client.contactFirstName ?? null,
         contactLastName: client.contactLastName ?? null,

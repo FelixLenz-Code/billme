@@ -66,6 +66,7 @@ export const runMigrations = (db: Database.Database): void => {
     tryAddColumn(db, 'invoices', 'client_number', 'TEXT');
     tryAddColumn(db, 'offers', 'client_number', 'TEXT');
     tryAddColumn(db, 'clients', 'customer_number', 'TEXT');
+    tryAddColumn(db, 'clients', 'salutation', 'TEXT');
     tryAddColumn(db, 'clients', 'contact_first_name', 'TEXT');
     tryAddColumn(db, 'clients', 'contact_last_name', 'TEXT');
 

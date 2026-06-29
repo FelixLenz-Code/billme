@@ -98,6 +98,7 @@ export const clients = sqliteTable(
     id: text('id').primaryKey(),
     customerNumber: text('customer_number'),
     company: text('company').notNull(),
+    salutation: text('salutation'),
     contactPerson: text('contact_person').notNull(),
     contactFirstName: text('contact_first_name'),
     contactLastName: text('contact_last_name'),

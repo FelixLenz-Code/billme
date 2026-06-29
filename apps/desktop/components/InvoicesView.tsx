@@ -398,6 +398,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
         (c) => c.id === selectedDocument.clientId || c.company === selectedDocument.client,
       );
       const ctx = buildEmailContext(selectedDocument, documentType, settings, {
+        salutation: matchedClient?.salutation,
         person: matchedClient?.contactPerson,
         firstName: matchedClient?.contactFirstName,
         lastName: matchedClient?.contactLastName,

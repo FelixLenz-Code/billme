@@ -361,6 +361,7 @@ export interface Client {
   id: string;
   customerNumber?: string;
   company: string;
+  salutation?: string; // Anrede (z. B. "Herr"/"Frau") für die Anrede in E-Mails
   contactPerson: string; // combined display name (derived from first/last when set)
   contactFirstName?: string;
   contactLastName?: string;

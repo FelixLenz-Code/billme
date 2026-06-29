@@ -13,6 +13,7 @@ export const EMAIL_VARIABLES: EmailVariable[] = [
   { key: 'document.dueDate', label: 'Fälligkeit' },
   { key: 'document.total', label: 'Gesamtbetrag (brutto)' },
   { key: 'client.name', label: 'Kundenname' },
+  { key: 'client.salutation', label: 'Anrede (z. B. Herr/Frau)' },
   { key: 'client.contact', label: 'Ansprechpartner (voller Name)' },
   { key: 'client.contactFirstName', label: 'Ansprechpartner – Vorname' },
   { key: 'client.contactLastName', label: 'Ansprechpartner – Nachname' },
@@ -51,6 +52,7 @@ export const splitContactName = (full?: string): { firstName: string; lastName: 
 };
 
 export interface EmailClientContact {
+  salutation?: string;
   person?: string;
   firstName?: string;
   lastName?: string;
@@ -75,6 +77,7 @@ export const buildEmailContext = (
     'document.dueDate': formatDate(doc.dueDate),
     'document.total': formatCurrency(gross),
     'client.name': doc.client ?? '',
+    'client.salutation': (contact?.salutation ?? '').trim(),
     'client.contact': fullContact,
     'client.contactFirstName': firstName,
     'client.contactLastName': lastName,
