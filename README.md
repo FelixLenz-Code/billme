@@ -29,6 +29,7 @@ This fork diverges from upstream with the following fixes (desktop app / Linux A
 - **Responsive top navigation & dashboard layout.** The top navbar no longer overlaps the logo/controls when the window is narrow (sides are fixed-width-free, the nav centers and scrolls horizontally when needed). The dashboard *"Top Einnahmequellen"* amounts no longer wrap or clip on long values.
 - **Guard against non-finite recurring totals.** Recurring invoice generation now clamps a non-finite gross total to `0` (`packages/desktop-data/src/recurring.ts`), fixing a failing test.
 - **"Open file/folder" actions fail gracefully.** `shell:openPath` calls (e.g. *PDF öffnen*) are wrapped so a failure shows a toast instead of crashing into a fatal error overlay.
+- **Audit log JSON serialization fixed (and *Verify* hardened).** The custom stable serializer emitted the bare token `undefined` for missing fields (e.g. `"servicePeriod":undefined`), producing invalid JSON in audit before/after snapshots; the integrity check then crashed on `JSON.parse`. Undefined/function/symbol values are now omitted (objects) or written as `null` (arrays), matching `JSON.stringify`. `verifyAuditChain` also tolerates legacy corrupt rows — it reports them instead of aborting — and the *Verify* button shows the result as an in-app banner.
 
 Check out a web-hosted demo of the app here: [Demo](https://demo.getbillme.com/)).
 
