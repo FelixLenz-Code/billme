@@ -995,6 +995,16 @@ const invoke = async <K extends IpcRouteKey>(key: K, args: IpcInput<K>): Promise
     case 'db:restore':
       return { ok: true, verification: { ok: true, errors: [], count: 0, headHash: null } } as IpcResult<K>;
 
+    case 'backup:runNow':
+      return {
+        ok: true,
+        at: new Date().toISOString(),
+        path: 'mock://backup/billme-demo.sqlite',
+        offsite: 'skipped',
+      } as IpcResult<K>;
+    case 'backup:testTarget':
+      return { ok: true } as IpcResult<K>;
+
     case 'shell:openPath':
     case 'shell:openExportsDir':
     case 'shell:openExternal':

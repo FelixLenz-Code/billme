@@ -172,6 +172,25 @@ export interface AppSettings {
     // Empty string means the default app location (userData/exports).
     outputDir: string;
   };
+  backup?: {
+    enabled: boolean; // master toggle for automatic backups
+    onExit: boolean; // create a backup when the app quits
+    directory: string; // local backup folder ('' = userData/backups)
+    retentionCount: number; // keep the last N backups locally
+    minIntervalHours: number; // minimum hours between automatic backups (0 = always)
+    target: 'local' | 'webdav' | 'rclone'; // offsite transfer mechanism
+    webdav?: { url: string; username: string; remoteDir: string }; // password in OS keychain
+    rclone?: { remote: string; binaryPath?: string };
+    lastRun?: string; // ISO timestamp of the last successful local backup
+    lastStatus?: {
+      ok: boolean;
+      at: string;
+      path?: string;
+      offsite?: 'ok' | 'failed' | 'pending' | 'skipped';
+      error?: string;
+    };
+    pendingOffsiteFile?: string; // local backup awaiting an offsite retry
+  };
   onboardingCompleted?: boolean;
 }
 

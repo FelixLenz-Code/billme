@@ -5,7 +5,7 @@ import type {
   Invoice,
   InvoiceElement,
 } from '../types';
-import { initDb } from '../db/connection';
+import { initDb, getDb } from '../db/connection';
 import { upsertInvoice } from '../db/invoicesRepo';
 import {
   MOCK_ACCOUNTS,
@@ -19,7 +19,9 @@ import { upsertClient } from '../db/clientsRepo';
 import { upsertArticle } from '../db/articlesRepo';
 import { upsertAccount } from '../db/accountsRepo';
 import { upsertRecurringProfile } from '../db/recurringRepo';
-import { setSettings } from '../db/settingsRepo';
+import { setSettings, getSettings, setBackupStatus } from '../db/settingsRepo';
+import { runBackup, retryOffsite, withinMinInterval } from './backupRunner';
+import { secrets } from './secrets';
 import {
   getActiveTemplate,
   listTemplates,
@@ -300,6 +302,27 @@ app.whenReady().then(async () => {
     logger.warn('Startup', 'Recurring scheduler failed to start', { error: String(e) });
   }
 
+  // Offsite backup catch-up: retry an upload that was left pending in a previous session.
+  try {
+    const backup = getSettings(db)?.backup;
+    if (backup?.enabled && backup.target !== 'local' && backup.pendingOffsiteFile) {
+      const pending = backup.pendingOffsiteFile;
+      void (async () => {
+        try {
+          const webdavPassword =
+            backup.target === 'webdav' ? (await secrets.get('backup.webdavPassword')) ?? '' : '';
+          const result = await retryOffsite(pending, backup, { webdavPassword });
+          setBackupStatus(db, result.status, result.pendingOffsiteFile);
+          logger.info('Backup', 'Offsite catch-up attempted', { offsite: result.status.offsite });
+        } catch (e) {
+          logger.warn('Backup', 'Offsite catch-up failed', { error: String(e) });
+        }
+      })();
+    }
+  } catch (e) {
+    logger.warn('Startup', 'Backup catch-up check failed', { error: String(e) });
+  }
+
   // Auto-updater (only in packaged builds)
   if (!isDev) {
     try {
@@ -335,7 +358,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
+let backupOnExitDone = false;
+
+app.on('before-quit', (event) => {
   try {
     portalSyncStop?.();
   } catch (error) {
@@ -351,4 +376,42 @@ app.on('before-quit', () => {
   } catch (error) {
     logger.warn('Shutdown', 'Failed to stop recurring scheduler', { error: String(error) });
   }
+
+  // Backup-on-exit. Runs once: prevent the quit, perform the backup (offsite upload
+  // is time-bounded inside runBackup), then quit for real on the second pass.
+  if (backupOnExitDone) return;
+
+  let backup;
+  try {
+    backup = getSettings(getDb())?.backup;
+  } catch {
+    backup = undefined;
+  }
+  if (!backup?.enabled || !backup.onExit || !userDataPath || withinMinInterval(backup)) {
+    return;
+  }
+
+  event.preventDefault();
+  void (async () => {
+    try {
+      const db = getDb();
+      const webdavPassword =
+        backup.target === 'webdav' ? (await secrets.get('backup.webdavPassword')) ?? '' : '';
+      const result = await runBackup(db, userDataPath, backup, { webdavPassword });
+      try {
+        setBackupStatus(db, result.status, result.pendingOffsiteFile);
+      } catch (error) {
+        logger.warn('Backup', 'Failed to persist backup status on exit', { error: String(error) });
+      }
+      logger.info('Backup', 'Backup on exit completed', {
+        ok: result.status.ok,
+        offsite: result.status.offsite,
+      });
+    } catch (error) {
+      logger.warn('Backup', 'Backup on exit failed', { error: String(error) });
+    } finally {
+      backupOnExitDone = true;
+      app.quit();
+    }
+  })();
 });

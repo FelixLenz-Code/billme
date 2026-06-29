@@ -25,7 +25,8 @@ import {
 import { deleteArticle, listArticles, upsertArticle } from '../db/articlesRepo';
 import { deleteAccount, listAccounts, upsertAccount } from '../db/accountsRepo';
 import { deleteRecurringProfile, listRecurringProfiles, upsertRecurringProfile } from '../db/recurringRepo';
-import { getSettings, setSettings } from '../db/settingsRepo';
+import { getSettings, setSettings, setBackupStatus } from '../db/settingsRepo';
+import { runBackup, testTarget as testBackupTarget } from './backupRunner';
 import { getInvoice } from '../db/invoicesRepo';
 import { finalizeNumber, releaseNumber, reserveNumber } from '../db/numberingRepo';
 import {
@@ -838,6 +839,28 @@ export const registerIpcHandlers = (
     ensureDir(path.dirname(resolved));
     await backupSqlite(db, resolved);
     return { path: resolved };
+  });
+
+  register(ipcMain, 'backup:runNow', async () => {
+    const db = requireDb();
+    const backup = getSettings(db)?.backup;
+    if (!backup) {
+      return { ok: false, at: new Date().toISOString(), error: 'Backup ist nicht konfiguriert' };
+    }
+    const webdavPassword =
+      backup.target === 'webdav' ? (await secrets.get('backup.webdavPassword')) ?? '' : '';
+    const result = await runBackup(db, getUserDataPath(), backup, { webdavPassword });
+    setBackupStatus(db, result.status, result.pendingOffsiteFile);
+    return result.status;
+  });
+
+  register(ipcMain, 'backup:testTarget', async () => {
+    const db = requireDb();
+    const backup = getSettings(db)?.backup;
+    if (!backup) return { ok: false, error: 'Backup ist nicht konfiguriert' };
+    const webdavPassword =
+      backup.target === 'webdav' ? (await secrets.get('backup.webdavPassword')) ?? '' : '';
+    return testBackupTarget(getUserDataPath(), backup, { webdavPassword });
   });
 
   register(ipcMain, 'db:restore', ({ path: restorePath }) => {

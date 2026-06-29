@@ -113,7 +113,15 @@ export const MOCK_SETTINGS: AppSettings = {
   },
   export: {
     outputDir: '',
-  }
+  },
+  backup: {
+    enabled: false,
+    onExit: true,
+    directory: '',
+    retentionCount: 10,
+    minIntervalHours: 0,
+    target: 'local',
+  },
 };
 
 export const MOCK_RECURRING_PROFILES: RecurringProfile[] = [

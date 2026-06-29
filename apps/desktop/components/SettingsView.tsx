@@ -52,6 +52,11 @@ export const SettingsView: React.FC = () => {
   const [resendApiKeyTouched, setResendApiKeyTouched] = useState(false);
   const [emailTestStatus, setEmailTestStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [emailTesting, setEmailTesting] = useState(false);
+  const [webdavPassword, setWebdavPassword] = useState('');
+  const [webdavPasswordConfigured, setWebdavPasswordConfigured] = useState(false);
+  const [webdavPasswordTouched, setWebdavPasswordTouched] = useState(false);
+  const [backupBusy, setBackupBusy] = useState<null | 'run' | 'test'>(null);
+  const [backupMessage, setBackupMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewLevelIndex, setPreviewLevelIndex] = useState<number | null>(null);
 
@@ -186,6 +191,17 @@ export const SettingsView: React.FC = () => {
         }
         setResendApiKeyTouched(false);
       }
+
+      if (webdavPasswordTouched) {
+        if (webdavPassword.trim()) {
+          await ipc.secrets.set({ key: 'backup.webdavPassword', value: webdavPassword.trim() });
+          setWebdavPasswordConfigured(true);
+        } else {
+          await ipc.secrets.delete({ key: 'backup.webdavPassword' });
+          setWebdavPasswordConfigured(false);
+        }
+        setWebdavPasswordTouched(false);
+      }
     } catch {
       // ignore secret save errors (OS keychain issues should not block settings save)
     }
@@ -203,7 +219,35 @@ export const SettingsView: React.FC = () => {
       }
     }));
   };
-  
+
+  type BackupSettings = NonNullable<AppSettings['backup']>;
+  const defaultBackup: BackupSettings = {
+    enabled: false,
+    onExit: true,
+    directory: '',
+    retentionCount: 10,
+    minIntervalHours: 0,
+    target: 'local',
+  };
+  const updateBackup = (patch: Partial<BackupSettings>) => {
+    setSettings(prev => ({ ...prev, backup: { ...defaultBackup, ...(prev.backup ?? {}), ...patch } }));
+  };
+  const updateBackupWebdav = (patch: Partial<NonNullable<BackupSettings['webdav']>>) => {
+    setSettings(prev => {
+      const base = { ...defaultBackup, ...(prev.backup ?? {}) };
+      return {
+        ...prev,
+        backup: { ...base, webdav: { url: '', username: '', remoteDir: '', ...(base.webdav ?? {}), ...patch } },
+      };
+    });
+  };
+  const updateBackupRclone = (patch: Partial<NonNullable<BackupSettings['rclone']>>) => {
+    setSettings(prev => {
+      const base = { ...defaultBackup, ...(prev.backup ?? {}) };
+      return { ...prev, backup: { ...base, rclone: { remote: '', ...(base.rclone ?? {}), ...patch } } };
+    });
+  };
+
   const updateDunningLevel = (index: number, field: keyof DunningLevel, value: any) => {
       const newLevels = [...settings.dunning.levels];
       newLevels[index] = { ...newLevels[index], [field]: value };
@@ -293,12 +337,14 @@ export const SettingsView: React.FC = () => {
   React.useEffect(() => {
     (async () => {
       try {
-        const [smtpConfigured, resendConfigured] = await Promise.all([
+        const [smtpConfigured, resendConfigured, webdavConfigured] = await Promise.all([
           ipc.secrets.has({ key: 'smtp.password' }),
           ipc.secrets.has({ key: 'resend.apiKey' }),
+          ipc.secrets.has({ key: 'backup.webdavPassword' }),
         ]);
         setSmtpPasswordConfigured(smtpConfigured);
         setResendApiKeyConfigured(resendConfigured);
+        setWebdavPasswordConfigured(webdavConfigured);
       } catch {
         // ignore
       }
@@ -1709,6 +1755,253 @@ export const SettingsView: React.FC = () => {
                   >
                     Restore
                   </button>
+              </div>
+            </div>
+
+            {/* Automatisches Offsite-Backup */}
+            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="text-lg font-bold text-gray-900">Automatisches Backup (Offsite)</h4>
+                  <p className="text-sm text-gray-500">
+                    Sichert die Datenbank beim Beenden der App und überträgt sie an ein Offsite-Ziel.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 shrink-0 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.backup?.enabled ?? false}
+                    onChange={(e) => updateBackup({ enabled: e.target.checked })}
+                    className="w-4 h-4 accent-black"
+                  />
+                  <span className="text-sm font-bold">Aktiv</span>
+                </label>
+              </div>
+
+              <div className={`space-y-4 ${settings.backup?.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.backup?.onExit ?? true}
+                    onChange={(e) => updateBackup({ onExit: e.target.checked })}
+                    className="w-4 h-4 accent-black"
+                  />
+                  Beim Beenden der App sichern
+                </label>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Lokaler Backup-Ordner</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={settings.backup?.directory ?? ''}
+                      onChange={(e) => updateBackup({ directory: e.target.value })}
+                      placeholder="Standardordner der App (userData/backups)"
+                      className="flex-1 bg-white border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                    />
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await ipc.dialog.pickDirectory({ title: 'Backup-Ordner wählen' });
+                          if (res.path) updateBackup({ directory: res.path });
+                        } catch (e) {
+                          alert(`Ordnerauswahl fehlgeschlagen: ${String(e)}`);
+                        }
+                      }}
+                      className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors whitespace-nowrap"
+                    >
+                      Ordner wählen
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Tipp: einen von Nextcloud/Syncthing synchronisierten Ordner wählen = Offsite ganz ohne Zugangsdaten.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Aufbewahrung (Anzahl)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={settings.backup?.retentionCount ?? 10}
+                      onChange={(e) => updateBackup({ retentionCount: Math.max(1, Number(e.target.value) || 1) })}
+                      className="w-full bg-white border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Mindestabstand (Std., 0 = immer)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={settings.backup?.minIntervalHours ?? 0}
+                      onChange={(e) => updateBackup({ minIntervalHours: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-full bg-white border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Offsite-Ziel</label>
+                  <select
+                    value={settings.backup?.target ?? 'local'}
+                    onChange={(e) => updateBackup({ target: e.target.value as 'local' | 'webdav' | 'rclone' })}
+                    className="w-full bg-white border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                  >
+                    <option value="local">Nur lokaler Ordner (externe Sync, z. B. Nextcloud-Client)</option>
+                    <option value="webdav">WebDAV (Nextcloud / ownCloud / Standard)</option>
+                    <option value="rclone">rclone (S3, Google Drive, B2 …)</option>
+                  </select>
+                </div>
+
+                {settings.backup?.target === 'webdav' && (
+                  <div className="space-y-3 border border-gray-200 rounded-2xl p-4 bg-white">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Server-URL</label>
+                      <input
+                        value={settings.backup?.webdav?.url ?? ''}
+                        onChange={(e) => updateBackupWebdav({ url: e.target.value })}
+                        placeholder="https://cloud.example.com/remote.php/dav/files/BENUTZER/"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Benutzer</label>
+                        <input
+                          value={settings.backup?.webdav?.username ?? ''}
+                          onChange={(e) => updateBackupWebdav({ username: e.target.value })}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Passwort</label>
+                        <input
+                          type="password"
+                          value={webdavPassword}
+                          onChange={(e) => {
+                            setWebdavPassword(e.target.value);
+                            setWebdavPasswordTouched(true);
+                          }}
+                          placeholder={webdavPasswordConfigured ? '•••••••• (gespeichert)' : '••••••••'}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Remote-Ordner</label>
+                      <input
+                        value={settings.backup?.webdav?.remoteDir ?? ''}
+                        onChange={(e) => updateBackupWebdav({ remoteDir: e.target.value })}
+                        placeholder="billme-backups"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Passwort wird im System-Keychain gespeichert. Tipp: ein App-Passwort statt des Hauptpassworts verwenden.
+                    </p>
+                  </div>
+                )}
+
+                {settings.backup?.target === 'rclone' && (
+                  <div className="space-y-3 border border-gray-200 rounded-2xl p-4 bg-white">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">rclone-Remote</label>
+                      <input
+                        value={settings.backup?.rclone?.remote ?? ''}
+                        onChange={(e) => updateBackupRclone({ remote: e.target.value })}
+                        placeholder="nextcloud:billme-backups"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Pfad zur rclone-Binary (optional)</label>
+                      <input
+                        value={settings.backup?.rclone?.binaryPath ?? ''}
+                        onChange={(e) => updateBackupRclone({ binaryPath: e.target.value })}
+                        placeholder="rclone"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      rclone muss installiert und mit <span className="font-mono">rclone config</span> eingerichtet sein.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    disabled={backupBusy !== null}
+                    onClick={async () => {
+                      setBackupBusy('run');
+                      setBackupMessage(null);
+                      try {
+                        const r = await ipc.backup.runNow();
+                        if (r.ok) {
+                          const suffix =
+                            r.offsite === 'ok'
+                              ? ' inkl. Offsite-Upload'
+                              : r.offsite === 'failed'
+                                ? ` – Offsite fehlgeschlagen: ${r.error ?? ''}`
+                                : '';
+                          setBackupMessage({ ok: r.offsite !== 'failed', text: `Backup erstellt${suffix}.` });
+                        } else {
+                          setBackupMessage({ ok: false, text: r.error ?? 'Backup fehlgeschlagen.' });
+                        }
+                      } catch (e) {
+                        setBackupMessage({ ok: false, text: `Backup fehlgeschlagen: ${String(e)}` });
+                      } finally {
+                        setBackupBusy(null);
+                      }
+                    }}
+                    className="px-5 py-3 rounded-xl font-bold bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {backupBusy === 'run' ? 'Sichere…' : 'Jetzt sichern'}
+                  </button>
+                  {settings.backup?.target !== 'local' && (
+                    <button
+                      disabled={backupBusy !== null}
+                      onClick={async () => {
+                        setBackupBusy('test');
+                        setBackupMessage(null);
+                        try {
+                          const r = await ipc.backup.testTarget();
+                          setBackupMessage({
+                            ok: r.ok,
+                            text: r.ok ? 'Verbindung erfolgreich.' : `Test fehlgeschlagen: ${r.error ?? ''}`,
+                          });
+                        } catch (e) {
+                          setBackupMessage({ ok: false, text: `Test fehlgeschlagen: ${String(e)}` });
+                        } finally {
+                          setBackupBusy(null);
+                        }
+                      }}
+                      className="px-5 py-3 rounded-xl font-bold bg-white border border-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {backupBusy === 'test' ? 'Teste…' : 'Verbindung testen'}
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400">
+                  Hinweis: Einstellungen zuerst speichern, dann „Jetzt sichern" bzw. „Verbindung testen".
+                </p>
+
+                {backupMessage && (
+                  <div
+                    className={`rounded-2xl p-3 text-sm font-medium ${
+                      backupMessage.ok ? 'bg-success-bg text-success' : 'bg-error-bg text-error'
+                    }`}
+                  >
+                    {backupMessage.text}
+                  </div>
+                )}
+
+                {settings.backup?.lastStatus && (
+                  <p className="text-xs text-gray-500">
+                    Letztes Backup: {new Date(settings.backup.lastStatus.at).toLocaleString('de-DE')}
+                    {settings.backup.lastStatus.offsite ? ` · Offsite: ${settings.backup.lastStatus.offsite}` : ''}
+                    {settings.backup.lastStatus.error ? ` · ${settings.backup.lastStatus.error}` : ''}
+                  </p>
+                )}
               </div>
             </div>
 

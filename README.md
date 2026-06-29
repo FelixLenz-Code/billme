@@ -29,6 +29,7 @@ This fork diverges from upstream with the following fixes (desktop app / Linux A
 - **Responsive top navigation & dashboard layout.** The top navbar no longer overlaps the logo/controls when the window is narrow (sides are fixed-width-free, the nav centers and scrolls horizontally when needed). The dashboard *"Top Einnahmequellen"* amounts no longer wrap or clip on long values.
 - **Guard against non-finite recurring totals.** Recurring invoice generation now clamps a non-finite gross total to `0` (`packages/desktop-data/src/recurring.ts`), fixing a failing test.
 - **"Open file/folder" actions fail gracefully.** `shell:openPath` calls (e.g. *PDF öffnen*) are wrapped so a failure shows a toast instead of crashing into a fatal error overlay.
+- **Automatic offsite backup (configurable in Settings → System).** A new *„Automatisches Backup (Offsite)"* card adds scheduled backups triggered **on app exit**. It always writes a local SQLite snapshot first (better-sqlite3 `backup()`), prunes to a configurable retention count, and then transfers it to a selectable **offsite target**: a **local folder** (universal – any external sync such as Nextcloud client/Syncthing), native **WebDAV** (Nextcloud/ownCloud/standard; password in the OS keychain), or **rclone** (S3/Drive/B2 …). Offsite failures never block the local backup or app quit; the file is retried on the next start. Includes *„Jetzt sichern"* and *„Verbindung testen"* actions plus a status line. New engine `apps/desktop/electron/backupRunner.ts`, IPC `backup:runNow`/`backup:testTarget`, and a `backup` settings section.
 - **Audit log JSON serialization fixed (and *Verify* hardened).** The custom stable serializer emitted the bare token `undefined` for missing fields (e.g. `"servicePeriod":undefined`), producing invalid JSON in audit before/after snapshots; the integrity check then crashed on `JSON.parse`. Undefined/function/symbol values are now omitted (objects) or written as `null` (arrays), matching `JSON.stringify`. `verifyAuditChain` also tolerates legacy corrupt rows — it reports them instead of aborting — and the *Verify* button shows the result as an in-app banner.
 
 Check out a web-hosted demo of the app here: [Demo](https://demo.getbillme.com/)).
@@ -47,6 +48,7 @@ PLEASE NOTE: This is still a Beta-Version. Expect some minor issues and please r
 - German-focused settings including payment terms, numbering, and optional ZUGFeRD EN16931 e-invoice export
 - Customizable default e-mail subject/body with document and client placeholders
 - Database backup & restore with native file selection
+- Automatic offsite backup on app exit (local folder / WebDAV / rclone), configurable in settings
 - Public offer portal API for publishing offers/invoices, customer decision flows, and PDF access links
 
 ## GoBD

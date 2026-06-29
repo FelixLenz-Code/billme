@@ -348,7 +348,7 @@ const rollbackImportBatchResultSchema = z.object({
   deletedCount: z.number().int(),
 });
 
-const secretKeySchema = z.enum(['smtp.password', 'portal.apiKey', 'resend.apiKey']);
+const secretKeySchema = z.enum(['smtp.password', 'portal.apiKey', 'resend.apiKey', 'backup.webdavPassword']);
 
 const secretGetSchema = z.object({ key: secretKeySchema });
 const secretSetSchema = z.object({ key: secretKeySchema, value: z.string().min(1) });
@@ -359,6 +359,15 @@ const dbRestoreSchema = z.object({ path: z.string().min(1) });
 const dbBackupToSchema = z.object({ path: z.string().min(1) });
 const dbBackupResultSchema = z.object({ path: z.string().min(1) });
 const dbRestoreResultSchema = z.object({ ok: z.boolean(), verification: auditVerifyResultSchema });
+
+const backupRunNowResultSchema = z.object({
+  ok: z.boolean(),
+  at: z.string(),
+  path: z.string().optional(),
+  offsite: z.enum(['ok', 'failed', 'pending', 'skipped']).optional(),
+  error: z.string().optional(),
+});
+const backupTestResultSchema = z.object({ ok: z.boolean(), error: z.string().optional() });
 
 const pdfExportArgsSchema = z.object({
   kind: z.enum(['invoice', 'offer']),
@@ -847,6 +856,16 @@ export const ipcRoutes = {
     channel: 'db:backupTo',
     args: dbBackupToSchema,
     result: dbBackupResultSchema,
+  },
+  'backup:runNow': {
+    channel: 'backup:runNow',
+    args: z.undefined(),
+    result: backupRunNowResultSchema,
+  },
+  'backup:testTarget': {
+    channel: 'backup:testTarget',
+    args: z.undefined(),
+    result: backupTestResultSchema,
   },
   'db:restore': {
     channel: 'db:restore',

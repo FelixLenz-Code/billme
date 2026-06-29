@@ -100,6 +100,30 @@ const normalizeSettings = (settings: unknown): AppSettings => {
       enabled: level.enabled !== undefined ? level.enabled : true,
     }));
   }
+  // Backward compatibility for backup section.
+  if (!next.backup) {
+    next.backup = {
+      enabled: false,
+      onExit: true,
+      directory: '',
+      retentionCount: 10,
+      minIntervalHours: 0,
+      target: 'local',
+    };
+  } else {
+    if (typeof next.backup.enabled !== 'boolean') next.backup.enabled = false;
+    if (typeof next.backup.onExit !== 'boolean') next.backup.onExit = true;
+    if (typeof next.backup.directory !== 'string') next.backup.directory = '';
+    if (typeof next.backup.retentionCount !== 'number' || !Number.isFinite(next.backup.retentionCount)) {
+      next.backup.retentionCount = 10;
+    }
+    if (typeof next.backup.minIntervalHours !== 'number' || !Number.isFinite(next.backup.minIntervalHours)) {
+      next.backup.minIntervalHours = 0;
+    }
+    if (next.backup.target !== 'webdav' && next.backup.target !== 'rclone') {
+      next.backup.target = 'local';
+    }
+  }
   return next as AppSettings;
 };
 
@@ -135,4 +159,44 @@ export const setLastRecurringRun = (db: Database.Database, timestamp: string): v
       WHERE id = 1
     `,
   ).run({ ts: timestamp });
+};
+
+export interface BackupRunStatus {
+  ok: boolean;
+  at: string;
+  path?: string;
+  offsite?: 'ok' | 'failed' | 'pending' | 'skipped';
+  error?: string;
+}
+
+// Persists the outcome of a backup run without rewriting the whole settings blob,
+// so it is safe to call from the main process (e.g. on app exit). Avoids writing
+// JSON null into optional string fields (which would fail schema validation on read).
+export const setBackupStatus = (
+  db: Database.Database,
+  status: BackupRunStatus,
+  pendingOffsiteFile: string | null,
+): void => {
+  const tx = db.transaction(() => {
+    db.prepare(
+      `UPDATE settings SET settings_json = json_set(settings_json, '$.backup.lastStatus', json(@status)) WHERE id = 1`,
+    ).run({ status: JSON.stringify(status) });
+
+    if (status.ok) {
+      db.prepare(
+        `UPDATE settings SET settings_json = json_set(settings_json, '$.backup.lastRun', @lastRun) WHERE id = 1`,
+      ).run({ lastRun: status.at });
+    }
+
+    if (pendingOffsiteFile) {
+      db.prepare(
+        `UPDATE settings SET settings_json = json_set(settings_json, '$.backup.pendingOffsiteFile', @pending) WHERE id = 1`,
+      ).run({ pending: pendingOffsiteFile });
+    } else {
+      db.prepare(
+        `UPDATE settings SET settings_json = json_remove(settings_json, '$.backup.pendingOffsiteFile') WHERE id = 1`,
+      ).run();
+    }
+  });
+  tx();
 };

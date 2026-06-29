@@ -502,6 +502,40 @@ export const appSettingsSchema = z.object({
       outputDir: z.string().default(''),
     })
     .optional(),
+  backup: z
+    .object({
+      enabled: z.boolean().default(false),
+      onExit: z.boolean().default(true),
+      directory: z.string().default(''),
+      retentionCount: z.number().int().min(1).max(1000).default(10),
+      minIntervalHours: z.number().min(0).max(8760).default(0),
+      target: z.enum(['local', 'webdav', 'rclone']).default('local'),
+      webdav: z
+        .object({
+          url: z.string().default(''),
+          username: z.string().default(''),
+          remoteDir: z.string().default(''),
+        })
+        .optional(),
+      rclone: z
+        .object({
+          remote: z.string().default(''),
+          binaryPath: z.string().optional(),
+        })
+        .optional(),
+      lastRun: z.string().optional(),
+      lastStatus: z
+        .object({
+          ok: z.boolean(),
+          at: z.string(),
+          path: z.string().optional(),
+          offsite: z.enum(['ok', 'failed', 'pending', 'skipped']).optional(),
+          error: z.string().optional(),
+        })
+        .optional(),
+      pendingOffsiteFile: z.string().optional(),
+    })
+    .optional(),
   onboardingCompleted: z.boolean().optional(),
 });
 

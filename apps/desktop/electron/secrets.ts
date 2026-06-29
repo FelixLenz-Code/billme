@@ -5,7 +5,8 @@ const SERVICE = 'billme';
 export type SecretKey =
   | 'smtp.password'
   | 'portal.apiKey'
-  | 'resend.apiKey';
+  | 'resend.apiKey'
+  | 'backup.webdavPassword';
 
 export const secrets = {
   get: async (key: SecretKey): Promise<string | null> => {
