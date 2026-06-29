@@ -397,7 +397,11 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
       const matchedClient = clients.find(
         (c) => c.id === selectedDocument.clientId || c.company === selectedDocument.client,
       );
-      const ctx = buildEmailContext(selectedDocument, documentType, settings, matchedClient?.contactPerson);
+      const ctx = buildEmailContext(selectedDocument, documentType, settings, {
+        person: matchedClient?.contactPerson,
+        firstName: matchedClient?.contactFirstName,
+        lastName: matchedClient?.contactLastName,
+      });
       const subjectTemplate = settings.email?.defaultSubject?.trim() || DEFAULT_EMAIL_SUBJECT;
       const bodyTemplate = settings.email?.defaultBody?.trim() || DEFAULT_EMAIL_BODY;
       setEmailData({

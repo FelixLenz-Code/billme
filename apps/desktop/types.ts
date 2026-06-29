@@ -361,7 +361,9 @@ export interface Client {
   id: string;
   customerNumber?: string;
   company: string;
-  contactPerson: string;
+  contactPerson: string; // combined display name (derived from first/last when set)
+  contactFirstName?: string;
+  contactLastName?: string;
   email: string; // legacy / default billing email
   phone: string;
   address: string; // legacy / default billing address (formatted)

@@ -72,6 +72,8 @@ export const ClientsView: React.FC = () => {
                 customerNumber: '',
                 company: '',
                 contactPerson: '',
+                contactFirstName: '',
+                contactLastName: '',
                 email: '',
                 phone: '',
                 address: '',
@@ -222,11 +224,16 @@ export const ClientsView: React.FC = () => {
         }
         setEditorErrors([]);
 
+        const contactFirstName = (draft.contactFirstName ?? '').trim();
+        const contactLastName = (draft.contactLastName ?? '').trim();
+        const combinedContact = [contactFirstName, contactLastName].filter(Boolean).join(' ');
         const payload: Client = {
             ...draft,
             company,
             email: legacyEmail,
-            contactPerson: draft.contactPerson.trim(),
+            contactFirstName,
+            contactLastName,
+            contactPerson: combinedContact || draft.contactPerson.trim(),
             phone: draft.phone.trim(),
             address: draft.address.trim(),
             notes: draft.notes ?? '',
@@ -614,13 +621,23 @@ export const ClientsView: React.FC = () => {
                                          className="w-full bg-surface-muted border border-border rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent transition-shadow"
                                      />
                                  </div>
-                                 <div>
-                                     <label className="block text-xs font-bold text-gray-500 mb-1">Ansprechpartner</label>
-                                     <input
-                                         value={draft.contactPerson}
-                                         onChange={(e) => setDraft({ ...draft, contactPerson: e.target.value })}
-                                         className="w-full bg-surface-muted border border-border rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent transition-shadow"
-                                     />
+                                 <div className="grid grid-cols-2 gap-3">
+                                     <div>
+                                         <label className="block text-xs font-bold text-gray-500 mb-1">Ansprechpartner – Vorname</label>
+                                         <input
+                                             value={draft.contactFirstName ?? ''}
+                                             onChange={(e) => setDraft({ ...draft, contactFirstName: e.target.value })}
+                                             className="w-full bg-surface-muted border border-border rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent transition-shadow"
+                                         />
+                                     </div>
+                                     <div>
+                                         <label className="block text-xs font-bold text-gray-500 mb-1">Ansprechpartner – Nachname</label>
+                                         <input
+                                             value={draft.contactLastName ?? ''}
+                                             onChange={(e) => setDraft({ ...draft, contactLastName: e.target.value })}
+                                             className="w-full bg-surface-muted border border-border rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-accent transition-shadow"
+                                         />
+                                     </div>
                                  </div>
                                  <div>
                                      <label className="block text-xs font-bold text-gray-500 mb-1">Telefon</label>

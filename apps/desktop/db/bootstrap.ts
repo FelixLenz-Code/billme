@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS clients (
   customer_number TEXT,
   company TEXT NOT NULL,
   contact_person TEXT NOT NULL,
+  contact_first_name TEXT,
+  contact_last_name TEXT,
   email TEXT NOT NULL,
   phone TEXT NOT NULL,
   address TEXT NOT NULL,

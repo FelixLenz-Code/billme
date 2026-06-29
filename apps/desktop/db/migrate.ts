@@ -66,6 +66,8 @@ export const runMigrations = (db: Database.Database): void => {
     tryAddColumn(db, 'invoices', 'client_number', 'TEXT');
     tryAddColumn(db, 'offers', 'client_number', 'TEXT');
     tryAddColumn(db, 'clients', 'customer_number', 'TEXT');
+    tryAddColumn(db, 'clients', 'contact_first_name', 'TEXT');
+    tryAddColumn(db, 'clients', 'contact_last_name', 'TEXT');
 
     // Projects: code + archive metadata
   tryAddColumn(db, 'client_projects', 'code', 'TEXT');
@@ -428,6 +430,29 @@ export const runMigrations = (db: Database.Database): void => {
       AND client_id IS NOT NULL
       AND client_id <> '';
   `);
+
+  // Backfill split contact name (first/last) from the legacy combined field.
+  // Idempotent: only fills rows whose last name is still empty.
+  try {
+    const contactRows = db
+      .prepare(`SELECT id, contact_person, contact_last_name FROM clients`)
+      .all() as Array<{ id: string; contact_person: string | null; contact_last_name: string | null }>;
+    const setContactName = db.prepare(
+      'UPDATE clients SET contact_first_name = @first, contact_last_name = @last WHERE id = @id',
+    );
+    for (const row of contactRows) {
+      if (row.contact_last_name && row.contact_last_name.trim()) continue;
+      const full = (row.contact_person ?? '').trim();
+      if (!full) continue;
+      const parts = full.split(/\s+/);
+      const last = parts.pop() ?? '';
+      const first = parts.join(' ');
+      setContactName.run({ id: row.id, first, last });
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes('no such') && !msg.includes('no column')) throw e;
+  }
 
   // Vorlagen: Label "Leistungsdatum" -> "Leistungszeitraum" (idempotent;
   // "Leistungszeitraum" enthält "Leistungsdatum" nicht, daher mehrfach sicher).
