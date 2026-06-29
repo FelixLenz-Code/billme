@@ -5,6 +5,7 @@ vi.mock('uuid', () => ({
   v4: () => 'invoice-uuid',
 }));
 import { bootstrapSql } from '../db/bootstrap';
+import { runMigrations } from '../db/migrate';
 import { getClient, upsertClient } from '../db/clientsRepo';
 import { getInvoice } from '../db/invoicesRepo';
 import { listRecurringProfiles, upsertRecurringProfile } from '../db/recurringRepo';
@@ -26,6 +27,7 @@ const canRunNativeSqlite = (() => {
 const createDb = (): Database.Database => {
   const db = new Database(':memory:');
   db.exec(bootstrapSql);
+  runMigrations(db);
   setSettings(db, structuredClone(MOCK_SETTINGS));
   return db;
 };
@@ -132,9 +134,12 @@ describe.skipIf(!canRunNativeSqlite)('recurringService sqlite adapters', () => {
     settings.automation.recurringEnabled = true;
     settings.automation.recurringRunTime = '09:00';
 
-    expect(shouldRunScheduledRecurring(settings, new Date('2026-05-10T09:05:00.000Z'))).toBe(true);
+    // shouldRunScheduledRecurring compares against the local-time run hour, so use
+    // a locally-constructed timestamp to keep the test timezone-independent.
+    const at0905Local = new Date(2026, 4, 10, 9, 5, 0);
+    expect(shouldRunScheduledRecurring(settings, at0905Local)).toBe(true);
 
-    settings.automation.lastRecurringRun = '2026-05-10T08:00:00.000Z';
-    expect(shouldRunScheduledRecurring(settings, new Date('2026-05-10T09:05:00.000Z'))).toBe(false);
+    settings.automation.lastRecurringRun = new Date(2026, 4, 10, 8, 0, 0).toISOString();
+    expect(shouldRunScheduledRecurring(settings, at0905Local)).toBe(false);
   });
 });

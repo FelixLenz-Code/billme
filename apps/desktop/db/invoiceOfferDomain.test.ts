@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import type { Invoice } from '../types';
 import { bootstrapSql } from './bootstrap';
+import { runMigrations } from './migrate';
 import { createInvoiceFromOffer, getInvoice } from './invoicesRepo';
 import {
   applyOfferDecision,
@@ -86,6 +87,7 @@ const createDb = () => {
       topClientsLimit: 5,
     },
   });
+  runMigrations(db);
   return db;
 };
 

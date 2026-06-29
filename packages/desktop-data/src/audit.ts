@@ -1,17 +1,30 @@
 import crypto from 'crypto';
 import type Database from 'better-sqlite3';
 
+// Stable, deterministic JSON serialization. Mirrors JSON.stringify semantics for
+// non-serializable values: undefined/function/symbol become `null` inside arrays and
+// are omitted as object properties. This avoids emitting the bare token `undefined`,
+// which previously produced invalid JSON (e.g. `"servicePeriod":undefined`).
+const isOmittable = (value: unknown): boolean =>
+  value === undefined || typeof value === 'function' || typeof value === 'symbol';
+
 const stableStringify = (value: unknown): string => {
+  if (isOmittable(value)) {
+    return 'null';
+  }
+
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value);
   }
 
   if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`;
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
   }
 
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
+  const keys = Object.keys(obj)
+    .filter((k) => !isOmittable(obj[k]))
+    .sort();
   const body = keys
     .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
     .join(',');
@@ -121,8 +134,29 @@ export const verifyAuditChain = (db: Database.Database) => {
       });
     }
 
-    const before = row.before_json ? JSON.parse(row.before_json) : null;
-    const after = row.after_json ? JSON.parse(row.after_json) : null;
+    // Tolerate legacy rows with corrupt stored JSON (e.g. written by an earlier
+    // serializer bug that emitted the bare token `undefined`). Such a row is
+    // reported as an error but does not abort the whole verification run.
+    let before: unknown = null;
+    let after: unknown = null;
+    let parseFailed = false;
+    try {
+      before = row.before_json ? JSON.parse(row.before_json) : null;
+      after = row.after_json ? JSON.parse(row.after_json) : null;
+    } catch (error) {
+      parseFailed = true;
+      errors.push({
+        sequence: row.sequence,
+        message: `corrupt stored JSON (${error instanceof Error ? error.message : String(error)})`,
+      });
+    }
+
+    if (parseFailed) {
+      // Cannot recompute the hash for an unparseable row; keep the chain linkage
+      // intact for subsequent entries and move on.
+      expectedPrevHash = row.hash;
+      continue;
+    }
 
     const payload = {
       sequence: row.sequence,
