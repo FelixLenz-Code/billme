@@ -1,152 +1,160 @@
 # Billme
 
-<img src="logos/FullLogo3.svg" alt="Billme logo" width="320" />
+<img src="logos/FullLogo3.svg" alt="Billme Logo" width="320" />
 
-A local-first invoicing desktop app (Electron + React + SQLite) and a public offer portal service.
-Built with love in Germany.
+Eine lokal-first Rechnungs-Desktop-App (Electron + React + SQLite) sowie ein öffentlicher Offer-Portal-Dienst.
+Mit Liebe in Deutschland entwickelt.
 
-> ## ⚠️ Fork notice
+> ## ⚠️ Fork-Hinweis
 >
-> **This is a fork of [bl4ckh4nd/billme](https://github.com/bl4ckh4nd/billme), maintained by [FelixLenz-Code](https://github.com/FelixLenz-Code) for bugfixing.**
-> It is not the official upstream repository. Changes made in this fork are listed in [Fork changes](#fork-changes) below.
+> **Dies ist ein Fork von [bl4ckh4nd/billme](https://github.com/bl4ckh4nd/billme), gepflegt von [FelixLenz-Code](https://github.com/FelixLenz-Code) zur Fehlerbehebung.**
+> Es ist nicht das offizielle Upstream-Repository. Die in diesem Fork vorgenommenen Änderungen sind unten unter [Fork-Änderungen](#fork-änderungen) aufgeführt.
 
-## Fork changes
+## Fork-Änderungen
 
-This fork diverges from upstream with the following fixes (desktop app / Linux AppImage):
+Dieser Fork weicht vom Upstream durch die folgenden Korrekturen ab (Desktop-App / Linux-AppImage):
 
-- **VAT slider for products now applies `0 %` correctly.** In the product edit form (`apps/desktop/components/ArticlesView.tsx`) the tax rate was saved with `Number(formData.taxRate) || 19`, so selecting **0 %** (relevant for *Kleinunternehmer* per §19 UStG) silently fell back to **19 %** because `0` is falsy. Now `0 %`, `7 %` and `19 %` are all saved as chosen.
-- **Example/seed data no longer reappears after a restart.** The mock/example data seeding in `apps/desktop/electron/main.ts` could run on startup and refill emptied tables (delete → restart → data back). The dev-only `isDev` guard is now additionally gated behind `!app.isPackaged`, so a packaged build (e.g. the AppImage) never seeds example data.
-- **Live preview totals/VAT update immediately.** In the document editor (`apps/desktop/components/InvoiceDocumentEditor.tsx`) the preview preferred a stored `taxSnapshot`, which froze the totals/VAT block until the document was saved and reopened. The preview now always uses the freshly computed tax snapshot, matching the form summary and what gets saved.
-- **Configurable export folder for documents.** Settings → System now has a *"Speicherort für Dokumente"* option to choose the directory where exported invoice/offer PDFs (incl. ZUGFeRD) are written. Empty means the default app location (`userData/exports`). Implemented via a new `export.outputDir` setting, a `dialog:pickDirectory` IPC route, and resolution in `apps/desktop/electron/pdfExport.ts` / `ipcHandlers.ts`. (Also fixes a pre-existing bug where sending a document by e-mail with a PDF attachment passed `userDataPath` incorrectly.)
-- **Export folder setting now actually takes effect.** The `export.outputDir` value was silently dropped by the IPC contract schema (`appSettingsSchema` in `packages/desktop-contracts`) on save and load — zod strips unknown keys — so the chosen folder had no effect. The field is now part of the schema and is honored on every export. As part of this, IPC client argument types use the schema *input* type (`z.input`) so fields with defaults stay optional for callers.
-- **Service period is now a month + year (`Leistungszeitraum`).** The service-date field accepts only month/year (`type="month"`), is shown on the invoice as e.g. *"Januar 2026"*, and the label was renamed from *Leistungsdatum* to *Leistungszeitraum* (editor + template). A startup migration updates the label in already-saved templates.
-- **Invoice/offer templates can be deleted.** A delete button was added to the Templates view (the backend delete route already existed but had no UI). Deleting the active template clears its active assignment automatically.
-- **Pick a template when creating a document.** The document editor now has a *"Vorlage"* selector to choose which invoice/offer template to use; the choice drives both the live preview and the exported PDF.
-- **Recording a full payment marks the invoice as paid.** Entering a payment via *Zahlungseingang* that covers the gross total now sets the status to `paid` automatically (and reverts to `open` if a payment is later reduced or deleted). Previously the status stayed `open`.
-- **Backup & restore with native file selection.** Restore has a *"Datei wählen"* open dialog and accepts backups from any location (validated by file type and SQLite header instead of a fixed folder); *"Speichern unter…"* lets you choose where to write a backup (new `db:backupTo` route). A confirmation prompt was added before a restore overwrites current data.
-- **Client contact person captured as separate first/last name.** The client editor now has *Vorname* and *Nachname* fields for the contact person (the combined name is still kept for compatibility). This enables a polite salutation in e-mails via the new `{{client.contactLastName}}` (and `{{client.contactFirstName}}`) placeholders, e.g. *"Sehr geehrter Herr Müller"*. A migration backfills first/last from existing combined names, and e-mails fall back to splitting the combined name when the explicit fields are empty.
-- **Per-client salutation (*Anrede*).** The client editor has an *Anrede* field (free text with *Herr*/*Frau* suggestions) that is stored per client and exposed in e-mails via the `{{client.salutation}}` placeholder, e.g. *"Sehr geehrte {{client.salutation}} {{client.contactLastName}},"* → *"Sehr geehrte Frau Müller,"*. The new `salutation` column is added by migration.
-- **Customizable default e-mail text with variables.** Settings → E-Mail lets you edit the default subject and body using placeholders such as `{{document.number}}`, `{{document.total}}`, `{{client.name}}`, `{{client.contact}}` (recipient contact person), and `{{company.name}}`/`{{company.owner}}`. Placeholders are resolved when the send dialog opens.
-- **Audit *Verify* shows a visible result.** The integrity-check outcome is now rendered as an in-app banner (valid / inconsistent with the list of errors) instead of an unreliable native dialog, including a loading state.
-- **Responsive top navigation & dashboard layout.** The top navbar no longer overlaps the logo/controls when the window is narrow (sides are fixed-width-free, the nav centers and scrolls horizontally when needed). The dashboard *"Top Einnahmequellen"* amounts no longer wrap or clip on long values.
-- **Guard against non-finite recurring totals.** Recurring invoice generation now clamps a non-finite gross total to `0` (`packages/desktop-data/src/recurring.ts`), fixing a failing test.
-- **"Open file/folder" actions fail gracefully.** `shell:openPath` calls (e.g. *PDF öffnen*) are wrapped so a failure shows a toast instead of crashing into a fatal error overlay.
-- **Automatic offsite backup (configurable in Settings → System).** A new *„Automatisches Backup (Offsite)"* card adds scheduled backups triggered **on app exit**. It always writes a local SQLite snapshot first (better-sqlite3 `backup()`), prunes to a configurable retention count, and then transfers it to a selectable **offsite target**: a **local folder** (universal – any external sync such as Nextcloud client/Syncthing), native **WebDAV** (Nextcloud/ownCloud/standard; password in the OS keychain), or **rclone** (S3/Drive/B2 …). Offsite failures never block the local backup or app quit; the file is retried on the next start. Includes *„Jetzt sichern"* and *„Verbindung testen"* actions plus a status line. New engine `apps/desktop/electron/backupRunner.ts`, IPC `backup:runNow`/`backup:testTarget`, and a `backup` settings section.
-- **Audit log JSON serialization fixed (and *Verify* hardened).** The custom stable serializer emitted the bare token `undefined` for missing fields (e.g. `"servicePeriod":undefined`), producing invalid JSON in audit before/after snapshots; the integrity check then crashed on `JSON.parse`. Undefined/function/symbol values are now omitted (objects) or written as `null` (arrays), matching `JSON.stringify`. `verifyAuditChain` also tolerates legacy corrupt rows — it reports them instead of aborting — and the *Verify* button shows the result as an in-app banner.
+- **Der MwSt-Schieberegler für Produkte wendet `0 %` jetzt korrekt an.** Im Produkt-Bearbeitungsformular (`apps/desktop/components/ArticlesView.tsx`) wurde der Steuersatz mit `Number(formData.taxRate) || 19` gespeichert, sodass die Auswahl **0 %** (relevant für *Kleinunternehmer* nach §19 UStG) stillschweigend auf **19 %** zurückfiel, weil `0` als „falsy" gilt. Jetzt werden `0 %`, `7 %` und `19 %` alle wie gewählt gespeichert.
+- **Beispiel-/Seed-Daten tauchen nach einem Neustart nicht mehr auf.** Das Seeding der Mock-/Beispieldaten in `apps/desktop/electron/main.ts` konnte beim Start laufen und geleerte Tabellen wieder befüllen (löschen → Neustart → Daten zurück). Der Dev-only-`isDev`-Guard ist jetzt zusätzlich durch `!app.isPackaged` abgesichert, sodass ein paketierter Build (z. B. das AppImage) niemals Beispieldaten seedet.
+- **Live-Vorschau für Summen/MwSt aktualisiert sofort.** Im Dokument-Editor (`apps/desktop/components/InvoiceDocumentEditor.tsx`) bevorzugte die Vorschau einen gespeicherten `taxSnapshot`, der den Summen-/MwSt-Block einfror, bis das Dokument gespeichert und erneut geöffnet wurde. Die Vorschau verwendet jetzt immer den frisch berechneten Steuer-Snapshot, passend zur Formular-Zusammenfassung und zum gespeicherten Stand.
+- **Konfigurierbarer Export-Ordner für Dokumente.** Einstellungen → System hat jetzt eine Option *„Speicherort für Dokumente"*, um das Verzeichnis zu wählen, in das exportierte Rechnungs-/Angebots-PDFs (inkl. ZUGFeRD) geschrieben werden. Leer bedeutet den Standard-App-Speicherort (`userData/exports`). Umgesetzt über eine neue `export.outputDir`-Einstellung, eine `dialog:pickDirectory`-IPC-Route und Auflösung in `apps/desktop/electron/pdfExport.ts` / `ipcHandlers.ts`. (Behebt außerdem einen vorbestehenden Bug, bei dem das Versenden eines Dokuments per E-Mail mit PDF-Anhang `userDataPath` falsch übergab.)
+- **Die Export-Ordner-Einstellung wird jetzt tatsächlich wirksam.** Der `export.outputDir`-Wert wurde vom Schema des IPC-Vertrags (`appSettingsSchema` in `packages/desktop-contracts`) beim Speichern und Laden stillschweigend verworfen — zod entfernt unbekannte Schlüssel —, sodass der gewählte Ordner keine Wirkung hatte. Das Feld ist jetzt Teil des Schemas und wird bei jedem Export berücksichtigt. Im Zuge dessen verwenden die IPC-Client-Argumenttypen den *Input*-Typ des Schemas (`z.input`), sodass Felder mit Defaults für Aufrufer optional bleiben.
+- **Der Leistungszeitraum ist jetzt Monat + Jahr (`Leistungszeitraum`).** Das Leistungsdatum-Feld akzeptiert nur noch Monat/Jahr (`type="month"`), wird auf der Rechnung z. B. als *„Januar 2026"* angezeigt, und die Bezeichnung wurde von *Leistungsdatum* zu *Leistungszeitraum* umbenannt (Editor + Vorlage). Eine Startup-Migration aktualisiert die Bezeichnung in bereits gespeicherten Vorlagen.
+- **Rechnungs-/Angebotsvorlagen können gelöscht werden.** In der Vorlagen-Ansicht wurde ein Löschen-Button ergänzt (die Backend-Lösch-Route existierte bereits, hatte aber keine UI). Beim Löschen der aktiven Vorlage wird deren Aktiv-Zuweisung automatisch entfernt.
+- **Vorlage beim Erstellen eines Dokuments auswählen.** Der Dokument-Editor hat jetzt einen *„Vorlage"*-Selector, um zu wählen, welche Rechnungs-/Angebotsvorlage verwendet wird; die Wahl steuert sowohl die Live-Vorschau als auch das exportierte PDF.
+- **Das Erfassen einer vollständigen Zahlung markiert die Rechnung als bezahlt.** Eine über *Zahlungseingang* erfasste Zahlung, die den Bruttobetrag deckt, setzt den Status jetzt automatisch auf `paid` (und zurück auf `open`, wenn eine Zahlung später reduziert oder gelöscht wird). Zuvor blieb der Status `open`.
+- **Backup & Wiederherstellung mit nativer Dateiauswahl.** Die Wiederherstellung hat einen *„Datei wählen"*-Öffnen-Dialog und akzeptiert Backups von beliebigen Orten (validiert über Dateityp und SQLite-Header statt eines festen Ordners); *„Speichern unter…"* lässt dich wählen, wohin ein Backup geschrieben wird (neue `db:backupTo`-Route). Vor dem Überschreiben aktueller Daten durch eine Wiederherstellung wurde eine Bestätigungsabfrage ergänzt.
+- **Ansprechpartner des Kunden als getrennter Vor-/Nachname erfasst.** Der Kunden-Editor hat jetzt *Vorname*- und *Nachname*-Felder für den Ansprechpartner (der kombinierte Name wird aus Kompatibilitätsgründen weiterhin gepflegt). Das ermöglicht eine höfliche Anrede in E-Mails über die neuen Platzhalter `{{client.contactLastName}}` (und `{{client.contactFirstName}}`), z. B. *„Sehr geehrter Herr Müller"*. Eine Migration füllt Vor-/Nachname aus bestehenden kombinierten Namen, und E-Mails fallen auf das Aufteilen des kombinierten Namens zurück, wenn die expliziten Felder leer sind.
+- **Kundenspezifische Anrede.** Der Kunden-Editor hat ein *Anrede*-Feld (Freitext mit *Herr*/*Frau*-Vorschlägen), das pro Kunde gespeichert und in E-Mails über den Platzhalter `{{client.salutation}}` bereitgestellt wird, z. B. *„Sehr geehrte {{client.salutation}} {{client.contactLastName}},"* → *„Sehr geehrte Frau Müller,"*. Die neue Spalte `salutation` wird per Migration hinzugefügt.
+- **Anpassbarer Standard-E-Mail-Text mit Variablen.** Einstellungen → E-Mail erlaubt das Bearbeiten von Standard-Betreff und -Text mithilfe von Platzhaltern wie `{{document.number}}`, `{{document.total}}`, `{{client.name}}`, `{{client.contact}}` (Ansprechpartner des Empfängers) und `{{company.name}}`/`{{company.owner}}`. Die Platzhalter werden beim Öffnen des Versanddialogs aufgelöst.
+- **Audit-*Prüfung* zeigt ein sichtbares Ergebnis.** Das Ergebnis der Integritätsprüfung wird jetzt als In-App-Banner dargestellt (gültig / inkonsistent mit der Fehlerliste) statt über einen unzuverlässigen nativen Dialog, inklusive Ladezustand.
+- **Responsive Top-Navigation & Dashboard-Layout.** Die obere Navigationsleiste überlappt Logo/Bedienelemente nicht mehr, wenn das Fenster schmal ist (die Seiten sind ohne feste Breite, die Navigation zentriert sich und scrollt bei Bedarf horizontal). Die Beträge unter *„Top Einnahmequellen"* im Dashboard brechen bei langen Werten nicht mehr um und werden nicht mehr abgeschnitten.
+- **Schutz gegen nicht-endliche Wiederkehrungs-Summen.** Die Generierung wiederkehrender Rechnungen begrenzt eine nicht-endliche Bruttosumme jetzt auf `0` (`packages/desktop-data/src/recurring.ts`) und behebt damit einen fehlschlagenden Test.
+- **„Datei/Ordner öffnen"-Aktionen scheitern sauber.** `shell:openPath`-Aufrufe (z. B. *PDF öffnen*) sind so gekapselt, dass ein Fehler einen Toast anzeigt, statt in ein fatales Fehler-Overlay zu stürzen.
+- **Automatisches Offsite-Backup (konfigurierbar in Einstellungen → System).** Eine neue Karte *„Automatisches Backup (Offsite)"* fügt geplante Backups hinzu, die **beim Beenden der App** ausgelöst werden. Es schreibt immer zuerst einen lokalen SQLite-Snapshot (better-sqlite3 `backup()`), beschränkt auf eine konfigurierbare Aufbewahrungsanzahl, und überträgt ihn dann auf ein wählbares **Offsite-Ziel**: einen **lokalen Ordner** (universell – jede externe Synchronisation wie Nextcloud-Client/Syncthing), natives **WebDAV** (Nextcloud/ownCloud/Standard; Passwort im OS-Schlüsselbund) oder **rclone** (S3/Drive/B2 …). Offsite-Fehler blockieren niemals das lokale Backup oder das Beenden der App; die Datei wird beim nächsten Start erneut versucht. Enthält *„Jetzt sichern"*- und *„Verbindung testen"*-Aktionen sowie eine Statuszeile. Neue Engine `apps/desktop/electron/backupRunner.ts`, IPC `backup:runNow`/`backup:testTarget` und ein `backup`-Einstellungsbereich.
+- **Audit-Log-JSON-Serialisierung behoben (und *Prüfung* gehärtet).** Der eigene stabile Serializer gab für fehlende Felder das nackte Token `undefined` aus (z. B. `"servicePeriod":undefined`) und erzeugte damit ungültiges JSON in den Before/After-Snapshots des Audits; die Integritätsprüfung stürzte dann bei `JSON.parse` ab. Undefined-/Funktions-/Symbol-Werte werden jetzt weggelassen (Objekte) oder als `null` geschrieben (Arrays), passend zu `JSON.stringify`. `verifyAuditChain` toleriert außerdem veraltete korrupte Zeilen — sie werden gemeldet statt abzubrechen — und der *Prüfen*-Button zeigt das Ergebnis als In-App-Banner.
 
-### Security & maintenance hardening
+### Härtung von Sicherheit & Wartung
 
-A repo-wide security review led to the following hardening (server API, offer portal, desktop, dependencies and deployment). A `pnpm audit --prod` went from **59 advisories (12 high)** down to **1 (low)**; the server-API and offer-portal test suites stay green and the desktop production build / AppImage were re-verified under Electron 39.
+Ein repo-weiter Security-Review führte zu folgender Härtung (Server-API, Offer-Portal, Desktop, Abhängigkeiten und Deployment). Ein `pnpm audit --prod` ging von **59 Hinweisen (12 hoch)** auf **1 (niedrig)** zurück; die Test-Suiten von Server-API und Offer-Portal bleiben grün, und der Desktop-Production-Build / das AppImage wurden unter Electron 39 erneut verifiziert.
 
-- **`SESSION_SECRET` is now enforced.** The server API (`apps/server-api/src/auth.ts`) previously fell back to a hardcoded `billme-dev-session-secret` when the env var was unset, which let anyone forge session tokens (full auth bypass). It now refuses to start with a missing, empty, default or too-short (<16 chars) secret. The Docker compose file (`docker-compose.server-mode.yml`) likewise requires `BILLME_SESSION_SECRET` (and `BILLME_POSTGRES_PASSWORD`) instead of shipping weak defaults.
-- **Brute-force protection on auth endpoints.** `POST /auth/login` and `/auth/bootstrap` are rate-limited (10/min per client IP → HTTP 429 with `Retry-After`) via an in-process limiter, blunting credential-stuffing.
-- **Correct auth error handling, no internal leaks.** Login failures now return **401** (instead of a 500 that exposed the internal error message), bootstrap conflicts return **409**, and unexpected 500s no longer echo `error.message` to the client. Token verification tolerates malformed input (returns 401 rather than crashing).
-- **Constant-time secret comparison.** Password-hash checks (both the in-memory and Postgres auth stores) and the offer-portal publish API-key check use `timingSafeEqual` instead of `!==`, removing a timing side-channel.
-- **Baseline security headers + CORS allowlist.** The API now sends `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and `Cross-Origin-Opener-Policy` on every response, and CORS can be restricted to an explicit list via `BILLME_CORS_ORIGINS` (defaults to reflecting the origin, since auth is bearer-token, not cookie based).
-- **Offer portal publishing fails closed by default.** Both the Node (`apps/offer-portal/src/node.ts`) and Cloudflare Worker (`worker.ts`) entrypoints now require the publish API key unless it is explicitly disabled, so an unconfigured deployment can no longer be published to anonymously.
-- **Content-Security-Policy on the desktop renderer.** The packaged (`file://`) renderer now gets a strict CSP (`script-src 'self'`, no `eval`, `object-src 'none'`, `frame-ancestors 'none'`, …) via `onHeadersReceived` in `apps/desktop/electron/main.ts`. It is intentionally skipped in dev so the Vite dev server / HMR keeps working.
-- **Dependency security updates.** `electron` 37 → 39.8.x (multiple use-after-free fixes), `nodemailer` 6 → 9, `drizzle-orm` 0.44 → 0.45.2 (SQL-injection fix), `hono` 4.9 → 4.12.25 and `@hono/node-server` → 1.19.13 (offer portal). Root `pnpm.overrides` pin patched `fast-uri`, `srvx`, `js-yaml` and `uuid` and drop the duplicated `electron@37`. Note: the Electron major upgrade means a fresh `pnpm install` re-fetches the Electron binary; for local `pnpm dev` the bundled `chrome-sandbox` must be `root:root` + mode `4755` once (the packaged AppImage is unaffected).
-- **`.env` files are now git-ignored.** `.gitignore` excludes `.env` / `.env.*` (keeping `*.example`) to avoid accidentally committing secrets; the example env documents how to generate strong values.
+- **`SESSION_SECRET` wird jetzt erzwungen.** Die Server-API (`apps/server-api/src/auth.ts`) fiel zuvor auf ein fest verdrahtetes `billme-dev-session-secret` zurück, wenn die Env-Variable nicht gesetzt war, was jedem das Fälschen von Session-Tokens erlaubte (vollständige Auth-Umgehung). Sie verweigert jetzt den Start bei fehlendem, leerem, Standard- oder zu kurzem (<16 Zeichen) Secret. Die Docker-Compose-Datei (`docker-compose.server-mode.yml`) verlangt ebenfalls `BILLME_SESSION_SECRET` (und `BILLME_POSTGRES_PASSWORD`), statt schwache Defaults auszuliefern.
+- **Brute-Force-Schutz an Auth-Endpoints.** `POST /auth/login` und `/auth/bootstrap` sind ratenbegrenzt (10/min pro Client-IP → HTTP 429 mit `Retry-After`) über einen in-process Limiter, was Credential-Stuffing erschwert.
+- **Korrekte Auth-Fehlerbehandlung, keine internen Leaks.** Login-Fehler liefern jetzt **401** (statt eines 500, der die interne Fehlermeldung preisgab), Bootstrap-Konflikte liefern **409**, und unerwartete 500er geben `error.message` nicht mehr an den Client zurück. Die Token-Verifikation toleriert fehlerhafte Eingaben (liefert 401 statt abzustürzen).
+- **Konstantzeit-Vergleich von Secrets.** Passwort-Hash-Prüfungen (sowohl der In-Memory- als auch der Postgres-Auth-Store) und die Prüfung des Offer-Portal-Publish-API-Keys verwenden `timingSafeEqual` statt `!==` und beseitigen damit einen Timing-Seitenkanal.
+- **Basis-Security-Header + CORS-Allowlist.** Die API sendet jetzt `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` und `Cross-Origin-Opener-Policy` bei jeder Antwort, und CORS kann über `BILLME_CORS_ORIGINS` auf eine explizite Liste beschränkt werden (Default: Spiegelung des Origins, da Auth Bearer-Token- und nicht Cookie-basiert ist).
+- **Offer-Portal-Veröffentlichung schlägt standardmäßig fehlsicher fehl (fail closed).** Sowohl der Node- (`apps/offer-portal/src/node.ts`) als auch der Cloudflare-Worker-Einstiegspunkt (`worker.ts`) verlangen jetzt den Publish-API-Key, sofern er nicht ausdrücklich deaktiviert ist, sodass ein unkonfiguriertes Deployment nicht mehr anonym befüllt werden kann.
+- **`GET /admin/setup` im Offer-Portal ist jetzt authentifiziert.** Die Setup-/Diagnoseseite war öffentlich erreichbar und gab Konfigurations-Status preis (gesetzte `PUBLIC_BASE_URL`, ob ein Publish-Key existiert, Strict-Auth-Status) — nützliche Aufklärung für Angreifer, besonders der `misconfigured`-Zustand. Sie liegt jetzt hinter demselben `x-api-key`-Check wie die Publish-Endpoints (`apps/offer-portal/src/app.ts`); `GET /health` bleibt bewusst offen für Loadbalancer/Monitoring.
+- **Content-Security-Policy im Desktop-Renderer.** Der paketierte (`file://`) Renderer erhält jetzt eine strikte CSP (`script-src 'self'`, kein `eval`, `object-src 'none'`, `frame-ancestors 'none'`, …) via `onHeadersReceived` in `apps/desktop/electron/main.ts`. Im Dev-Modus wird sie absichtlich übersprungen, damit der Vite-Dev-Server / HMR weiter funktioniert.
+- **Sicherheits-Updates bei Abhängigkeiten.** `electron` 37 → 39.8.x (mehrere Use-after-free-Fixes), `nodemailer` 6 → 9, `drizzle-orm` 0.44 → 0.45.2 (SQL-Injection-Fix), `hono` 4.9 → 4.12.25 und `@hono/node-server` → 1.19.13 (Offer-Portal). Die Root-`pnpm.overrides` pinnen gepatchtes `fast-uri`, `srvx`, `js-yaml` und `uuid` und entfernen das duplizierte `electron@37`. Hinweis: Der Electron-Major-Upgrade bedeutet, dass ein frisches `pnpm install` das Electron-Binary neu lädt; für lokales `pnpm dev` muss das gebündelte `chrome-sandbox` einmalig `root:root` + Modus `4755` sein (das paketierte AppImage ist davon nicht betroffen).
+- **`.env`-Dateien sind jetzt git-ignoriert.** `.gitignore` schließt `.env` / `.env.*` aus (behält `*.example`), um das versehentliche Committen von Secrets zu vermeiden; die Beispiel-Env-Datei dokumentiert, wie starke Werte erzeugt werden.
 
-Check out a web-hosted demo of the app here: [Demo](https://demo.getbillme.com/)).
+### Deployment
 
-PLEASE NOTE: This is still a Beta-Version. Expect some minor issues and please report them so they can be fixed!
+- **Offer-Portal als eigenständiger Docker-Installer.** Das Offer-Portal lässt sich für ein öffentliches, selbst gehostetes Deployment als Single-Container-Docker-Compose-Stack ausliefern — mit dauerhafter SQLite-Speicherung, PDFs auf der Platte (persistiert im benannten Volume `offer-portal-data`), Healthcheck und `restart: unless-stopped`. Neue Dateien: `apps/offer-portal/Dockerfile`, `docker-compose.offer-portal.yml`, `.env.offer-portal.example`. TLS terminiert ein vorgelagerter Reverse-Proxy; der Container ist standardmäßig nur an `127.0.0.1` gebunden. Start mit `pnpm docker:offer-portal` (siehe `docs/offer-portal.md`).
 
-<img src="assets/screenshot_billme.png" alt="Billme screenshot" width="900" />
+Eine web-gehostete Demo der App gibt es hier: [Demo](https://demo.getbillme.com/).
 
-## Features
+BITTE BEACHTEN: Dies ist noch eine Beta-Version. Erwarte kleinere Probleme und melde sie bitte, damit sie behoben werden können!
 
-- Visual invoice/offer editor with drag-and-drop canvas blocks, layers, and reusable templates
-- Unified invoices/offers dashboard with search, status filters, portal sync, and offer-to-invoice conversion
-- Recurring invoice profiles (`Abo-Rechnungen`) with interval scheduling and manual run support
-- Bank transaction matching workflow to link payments and automatically update invoice payment status
-- Client management with multiple contacts/addresses plus client-level revenue and outstanding metrics
-- German-focused settings including payment terms, numbering, and optional ZUGFeRD EN16931 e-invoice export
-- Customizable default e-mail subject/body with document and client placeholders
-- Database backup & restore with native file selection
-- Automatic offsite backup on app exit (local folder / WebDAV / rclone), configurable in settings
-- Public offer portal API for publishing offers/invoices, customer decision flows, and PDF access links
+<img src="assets/screenshot_billme.png" alt="Billme Screenshot" width="900" />
+
+## Funktionen
+
+- Visueller Rechnungs-/Angebots-Editor mit Drag-and-drop-Canvas-Blöcken, Ebenen und wiederverwendbaren Vorlagen
+- Vereinheitlichtes Rechnungs-/Angebots-Dashboard mit Suche, Status-Filtern, Portal-Synchronisation und Angebot-zu-Rechnung-Umwandlung
+- Profile für wiederkehrende Rechnungen (`Abo-Rechnungen`) mit Intervallplanung und manuellem Ausführen
+- Workflow zum Abgleich von Banktransaktionen, um Zahlungen zu verknüpfen und den Zahlungsstatus von Rechnungen automatisch zu aktualisieren
+- Kundenverwaltung mit mehreren Kontakten/Adressen plus Kennzahlen zu Umsatz und offenen Posten auf Kundenebene
+- Auf Deutschland ausgerichtete Einstellungen inklusive Zahlungsbedingungen, Nummerierung und optionalem ZUGFeRD-EN16931-E-Rechnungs-Export
+- Anpassbarer Standard-E-Mail-Betreff/-Text mit Dokument- und Kunden-Platzhaltern
+- Datenbank-Backup & -Wiederherstellung mit nativer Dateiauswahl
+- Automatisches Offsite-Backup beim Beenden der App (lokaler Ordner / WebDAV / rclone), in den Einstellungen konfigurierbar
+- Öffentliche Offer-Portal-API zum Veröffentlichen von Angeboten/Rechnungen, für Kundenentscheidungs-Flows und PDF-Zugriffslinks
 
 ## GoBD
 
-Billme includes technical controls that support GoBD-oriented workflows:
+Billme enthält technische Kontrollen, die GoBD-orientierte Abläufe unterstützen:
 
-- Append-only audit log at DB level (update/delete blocked by SQL triggers)
-- Hash-chained audit entries with built-in integrity verification
-- Audit export as CSV for external review/documentation
-- Mandatory reason prompts in key change/delete flows
+- Append-only-Audit-Log auf DB-Ebene (Update/Delete durch SQL-Trigger blockiert)
+- Hash-verkettete Audit-Einträge mit eingebauter Integritätsprüfung
+- Audit-Export als CSV zur externen Prüfung/Dokumentation
+- Verpflichtende Begründungsabfragen in zentralen Änderungs-/Lösch-Flows
 
-Important: GoBD conformity is always process- and setup-dependent (including organizational controls and Verfahrensdokumentation). Billme does not claim an official GoBD certification by financial authorities.
+Wichtig: GoBD-Konformität ist immer prozess- und einrichtungsabhängig (einschließlich organisatorischer Kontrollen und Verfahrensdokumentation). Billme erhebt keinen Anspruch auf eine offizielle GoBD-Zertifizierung durch Finanzbehörden.
 
 ## Workspace
 
-- `apps/desktop`: Electron desktop app
-- `apps/demo`: Cloudflare Worker-hosted browser demo (desktop UI + mock services)
-- `apps/offer-portal`: Hono TypeScript service for published offers/invoices
-- `apps/server-api`: Fastify server-mode API
-- `apps/server-worker`: background worker for server-mode automation
-- `apps/web`: Lite browser shell for server mode
-- `apps/web-pro`: Pro browser shell for server mode
-- `packages/ui`: Shared UI components and utilities
+- `apps/desktop`: Electron-Desktop-App
+- `apps/demo`: per Cloudflare Worker gehostete Browser-Demo (Desktop-UI + Mock-Services)
+- `apps/offer-portal`: Hono-TypeScript-Dienst für veröffentlichte Angebote/Rechnungen
+- `apps/server-api`: Fastify-Server-Mode-API
+- `apps/server-worker`: Hintergrund-Worker für Server-Mode-Automatisierung
+- `apps/web`: Lite-Browser-Shell für den Server-Mode
+- `apps/web-pro`: Pro-Browser-Shell für den Server-Mode
+- `packages/ui`: Gemeinsame UI-Komponenten und Hilfsfunktionen
 
-## Prerequisites
+## Voraussetzungen
 
 - Node.js 20+
 - `pnpm` 10+
 
-## Getting Started
+## Erste Schritte
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-This starts the desktop app in development mode.
+Damit startet die Desktop-App im Entwicklungsmodus.
 
-## Common Commands
+## Gängige Befehle
 
 ```bash
-pnpm dev                 # Desktop app (Electron + renderer)
-pnpm dev:demo            # Demo app (Cloudflare Worker)
-pnpm dev:renderer        # Renderer only
-pnpm build               # Build desktop bundles
-pnpm build:demo          # Build demo frontend + typecheck worker
-pnpm dist                # Build distributable desktop packages
-pnpm build:server-api    # Build the Fastify API
-pnpm build:server-cli    # Build the Billme server CLI package
-pnpm build:server-worker # Build the background worker
-pnpm build:web           # Build the lite browser shell
-pnpm build:web-pro       # Build the pro browser shell
-pnpm docker:server-mode  # Start the Docker compose stack
+pnpm dev                 # Desktop-App (Electron + Renderer)
+pnpm dev:demo            # Demo-App (Cloudflare Worker)
+pnpm dev:renderer        # Nur Renderer
+pnpm build               # Desktop-Bundles bauen
+pnpm build:demo          # Demo-Frontend bauen + Worker-Typecheck
+pnpm dist                # Verteilbare Desktop-Pakete bauen
+pnpm build:server-api    # Fastify-API bauen
+pnpm build:server-cli    # Billme-Server-CLI-Paket bauen
+pnpm build:server-worker # Hintergrund-Worker bauen
+pnpm build:web           # Lite-Browser-Shell bauen
+pnpm build:web-pro       # Pro-Browser-Shell bauen
+pnpm docker:server-mode  # Docker-Compose-Stack starten
 pnpm docker:server-mode:logs
 pnpm docker:server-mode:down
+pnpm docker:offer-portal       # Offer-Portal-Container bauen + starten
+pnpm docker:offer-portal:logs
+pnpm docker:offer-portal:down
 pnpm test:e2e:server:install
 pnpm test:e2e:server:smoke
 pnpm test:e2e:server:full
 pnpm -C apps/desktop test
 pnpm -C apps/desktop typecheck
-pnpm deploy:demo         # Deploy demo to Cloudflare Workers
+pnpm deploy:demo         # Demo auf Cloudflare Workers deployen
 pnpm -C apps/offer-portal dev
 pnpm -C apps/offer-portal build
 ```
 
-## Server CLI package
+## Server-CLI-Paket
 
-`packages/server-cli` provides a typed server-mode HTTP client plus the `billme` CLI binary for auth, shared billing CRUD, exports, and the v1 pro catalog/template surface.
+`packages/server-cli` stellt einen typisierten Server-Mode-HTTP-Client sowie das `billme`-CLI-Binary für Auth, gemeinsames Billing-CRUD, Exporte und die v1-Pro-Katalog-/Vorlagen-Schnittstelle bereit.
 
-Server-mode Playwright needs Docker or Podman access plus a local Chromium install. See `docs/server-mode-docker.md` for the smoke/full suite entrypoints, runtime override, and CI prerequisites.
+Server-Mode-Playwright benötigt Docker- oder Podman-Zugriff plus eine lokale Chromium-Installation. Siehe `docs/server-mode-docker.md` für die Smoke-/Full-Suite-Einstiegspunkte, Runtime-Overrides und CI-Voraussetzungen.
 
-## Documentation
+## Dokumentation
 
 - `docs/architecture.md`
 - `docs/offer-portal.md`
 - `docs/server-mode-docker.md`
 - `docs/releasing.md`
 
-## License
+## Lizenz
 
-FSL1.1, see `LICENSE`.
+FSL1.1, siehe `LICENSE`.
 
-## Notes
+## Hinweise
 
-- Do not commit generated build output (`dist/`, `out/`, logs).
+- Generierte Build-Ausgaben (`dist/`, `out/`, Logs) nicht committen.

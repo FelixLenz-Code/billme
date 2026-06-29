@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/node.ts",
-    "start": "node dist/node.js",
+    "start": "node --import tsx dist/node.js",
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test src/**/*.test.ts",
     "deploy:cf": "wrangler deploy"

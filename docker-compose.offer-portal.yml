@@ -1,0 +1,32 @@
+services:
+  offer-portal:
+    build:
+      context: .
+      dockerfile: apps/offer-portal/Dockerfile
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 10s
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      # Durable storage (SQLite + PDFs on disk) instead of the in-memory default.
+      STORAGE_MODE: sqlite
+      DATABASE_PATH: /data/offer-portal.sqlite
+      STORAGE_DIR: /data/storage
+      # Publish endpoints are protected with this key (sent by the desktop app as
+      # x-api-key). Fail closed: required unless explicitly disabled.
+      PUBLISH_API_KEY: ${OFFER_PORTAL_PUBLISH_API_KEY:?OFFER_PORTAL_PUBLISH_API_KEY must be set to a strong random value}
+      REQUIRE_PUBLISH_API_KEY: ${OFFER_PORTAL_REQUIRE_PUBLISH_API_KEY:-true}
+      # Public origin behind your reverse proxy, e.g. https://offers.example.com.
+      # Used for generated links and for the decision origin/referer check.
+      PUBLIC_BASE_URL: ${OFFER_PORTAL_PUBLIC_BASE_URL:-}
+    volumes:
+      - "offer-portal-data:/data"
+    # Bound to localhost by default: terminate TLS in your reverse proxy and
+    # forward to this port. Set OFFER_PORTAL_BIND_HOST=0.0.0.0 only if the proxy
+    # runs on another host and the network is otherwise firewalled.
+    ports:
+      - "${OFFER_PORTAL_BIND_HOST:-127.0.0.1}:${OFFER_PORTAL_PORT:-3001}:3001"
+
+volumes:
+  offer-portal-data:

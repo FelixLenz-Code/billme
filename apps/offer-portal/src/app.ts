@@ -245,6 +245,11 @@ export const createApp = (deps: { store: OfferStore; pdf: PdfStore; config: Port
   app.get('/health', (c) => c.json({ ok: true, ts: nowIso() }));
 
   app.get('/admin/setup', (c) => {
+    const auth = checkPublishAuth(deps.config, c);
+    if (!auth.ok) {
+      c.header('WWW-Authenticate', 'ApiKey realm="publish"');
+      return c.json({ error: auth.error ?? 'unauthorized' }, auth.status ?? 401);
+    }
     const baseUrl = deps.config.publicBaseUrl ?? '(unset)';
     const hasKey = Boolean(deps.config.publishApiKey);
     const strictAuth = Boolean(deps.config.requirePublishApiKey);
