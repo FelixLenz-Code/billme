@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "@billme/finance-intelligence": "workspace:*",
     "@billme/desktop-core": "workspace:*",
+    "@billme/finance-intelligence": "workspace:*",
     "iconv-lite": "^0.6.3",
-    "papaparse": "^5.5.3"
+    "papaparse": "^5.7.1"
   },
   "exports": {
     ".": {

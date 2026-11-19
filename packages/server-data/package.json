@@ -13,7 +13,7 @@
   "dependencies": {
     "@billme/accounting-shared": "workspace:*",
     "@billme/server-core": "workspace:*",
-    "pg": "^8.16.3",
+    "pg": "^8.23.1",
     "zod": "^3.25.76"
   },
   "peerDependencies": {
@@ -26,9 +26,9 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^22.19.7",
-    "@types/pg": "^8.15.5",
-    "tsx": "^4.20.5",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
     "typescript": "~5.8.3"
   },
   "exports": {

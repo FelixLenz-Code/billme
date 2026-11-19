@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "zustand": "^5.0.10"
+    "zustand": "^5.1.0"
   },
   "exports": {
     ".": {
